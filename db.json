@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "nom_user": "Admin Swafy",
+      "email": "admin@gmail.com",
+      "password": "$2a$10$UrAZ14NXwlUm/AMVWpyR/uqfPMSXN7DJUPB/zPfCQObp5Ph8JZ23C",
+      "role": "admin",
+      "created_at": "2026-04-02T15:53:27.412Z"
+    }
+  ]
+}
