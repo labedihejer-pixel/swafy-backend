@@ -63,13 +63,14 @@ app.get("/", (req, res) => {
 // ===============================
 // ✅ SOCKET.IO
 // ===============================
+
 const io = new Server(server, {
   cors: {
-    origin: ALLOWED_ORIGINS,
+    origin: "*",
     methods: ["GET", "POST"],
-    credentials: true,
   },
 });
+
 
 const roomUsers = {};
 const socketRoomMap = {};
