@@ -3,10 +3,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const seedAdmin = async () => {
-  const email = "admin@swafy.com";
-  const plainPassword = "admin123";
+  const email = "admin@gmail.com";
+  const plainPassword = "adminadmin";
 
-  // ✅ نمسحو admin القديم مهما كان
+  // نمسحو admin القديم مهما كان
   await db.execute(
     "DELETE FROM utilisateurs WHERE email_user = ?",
     [email]
@@ -21,9 +21,8 @@ const seedAdmin = async () => {
     ["Admin", email, hashedPassword, "admin", "actif"]
   );
 
-  console.log("✅ ADMIN SEEDED SUCCESSFULLY");
+  console.log("✅ ADMIN SEEDED SUCCESSFULLY (admin@gmail.com / adminadmin)");
 };
-
 
 // ===============================
 // ✅ LOGIN
