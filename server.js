@@ -4,10 +4,9 @@ const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
-
 const db = require("./config/db");
-
 // Routes
+const { seedAdmin } = require("./controllers/authController");
 const authRoutes = require("./routes/authRoutes");
 const eventRoutes = require("./routes/EventRoutes");
 const liveRoutes = require("./routes/LiveRoutes");
@@ -149,21 +148,16 @@ function leaveRoom(socket) {
 io.on("connection", (socket) => {
   console.log("✅ Socket connecté:", socket.id);
 
+  // ✅ JOIN ROOM
   socket.on("join-room", async (payload, ack = () => {}) => {
     try {
       const { roomCode, userName, role = "guest", accessToken } = payload || {};
-
       if (!roomCode || !accessToken) {
         ack({ ok: false, message: "Données manquantes" });
         return;
       }
 
-      const check = await validateLiveSocketAccess(
-        roomCode,
-        accessToken,
-        role
-      );
-
+      const check = await validateLiveSocketAccess(roomCode, accessToken, role);
       if (!check.ok) {
         ack({ ok: false, message: check.message });
         return;
@@ -177,22 +171,9 @@ io.on("connection", (socket) => {
       socket.data.userName = userName || "Invité";
 
       if (!roomUsers[roomCode]) roomUsers[roomCode] = [];
-
       roomUsers[roomCode].push({
         socketId: socket.id,
-        userName: userName || "Invité",
-        role,
-      });
-
-      const others = roomUsers[roomCode].filter(
-        (u) => u.socketId !== socket.id
-      );
-
-      socket.emit("all-users", others);
-
-      socket.to(roomCode).emit("user-joined", {
-        socketId: socket.id,
-        userName: userName || "Invité",
+        userName: socket.data.userName,
         role,
       });
 
@@ -203,45 +184,37 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("offer", ({ target, sdp }) => {
-    if (!socket.data?.roomCode || !target || !sdp) return;
-    if (socketRoomMap[target] !== socket.data.roomCode) return;
-    io.to(target).emit("offer", { caller: socket.id, sdp });
-  });
+  // ✅ CHAT — MOHIM BARSHA
+  socket.on("send-message", ({ roomCode, message }) => {
+    if (!socket.data?.roomCode) return;
+    if (socket.data.roomCode !== roomCode) return;
 
-  socket.on("answer", ({ target, sdp }) => {
-    if (!socket.data?.roomCode || !target || !sdp) return;
-    if (socketRoomMap[target] !== socket.data.roomCode) return;
-    io.to(target).emit("answer", { responder: socket.id, sdp });
-  });
-
-  socket.on("ice-candidate", ({ target, candidate }) => {
-    if (!socket.data?.roomCode || !target || !candidate) return;
-    if (socketRoomMap[target] !== socket.data.roomCode) return;
-    io.to(target).emit("ice-candidate", { from: socket.id, candidate });
-  });
-
-  socket.on("toggle-media", ({ roomCode, type, enabled }) => {
-    if (!socket.data?.roomCode || socket.data.roomCode !== roomCode) return;
-
-    socket.to(roomCode).emit("user-media-toggled", {
-      socketId: socket.id,
-      type,
-      enabled,
+    io.to(roomCode).emit("receive-message", {
+      user: socket.data.userName || "Invité",
+      text: message,
+      time: new Date().toLocaleTimeString(),
     });
   });
 
-  socket.on("leave-room", () => leaveRoom(socket));
+  // ✅ LEAVE ROOM
+  socket.on("leave-room", () => {
+    leaveRoom(socket);
+  });
 
+  // ✅ DISCONNECT
   socket.on("disconnect", () => {
     leaveRoom(socket);
     console.log("❌ Socket déconnecté:", socket.id);
   });
 });
 
+
+seedAdmin();
+
 // ===============================
 // ✅ START SERVER
 // ===============================
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Serveur lancé sur le port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`✅ Serveur lancé sur http://localhost:${PORT}`);
 });
+

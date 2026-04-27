@@ -91,26 +91,34 @@ router.post("/session/create", verifyToken, async (req, res) => {
         ]
       );
     }
+const [rows] = await db.execute(
+  "SELECT * FROM lives WHERE room_code=? LIMIT 1",
+  [roomCode]
+);
 
-    const [rows] = await db.execute(
-      "SELECT * FROM lives WHERE room_code=? LIMIT 1",
-      [roomCode]
-    );
+if (!rows.length) {
+  return res.status(404).json({
+    success: false,
+    message: "Live introuvable après création",
+  });
+}
 
-    const live = rows[0];
+const live = rows[0];
 
-    // ✅ Tokens sécurisés
+// ✅ حماية إضافية
+const tokenVersion = Number(live.token_version || 1);
+
     const hostAccessToken = jwt.sign(
-      { type: "live", role: "host", roomCode, userId, v: live.token_version },
-      LIVE_SECRET,
-      { expiresIn: "6h" }
-    );
+  { type: "live", role: "host", roomCode, userId, v: tokenVersion },
+  LIVE_SECRET,
+  { expiresIn: "6h" }
+);
 
-    const viewerAccessToken = jwt.sign(
-      { type: "live", role: "guest", roomCode, v: live.token_version },
-      LIVE_SECRET,
-      { expiresIn: "6h" }
-    );
+const viewerAccessToken = jwt.sign(
+  { type: "live", role: "guest", roomCode, v: tokenVersion },
+  LIVE_SECRET,
+  { expiresIn: "6h" }
+);
 
     res.json({
       success: true,

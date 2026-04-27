@@ -18,8 +18,14 @@ const verifyToken = (req, res, next) => {
     if (err) {
       return res.status(403).json({ message: "Token invalide ou expiré" });
     }
-    req.user = decoded;
-    next();
+   req.user = decoded;
+
+// ✅ نطبع userId باش backend يفهمو
+req.user.id_user = decoded.id_user || decoded.id || decoded.userId;
+
+next();
+
+
   });
 };
 
