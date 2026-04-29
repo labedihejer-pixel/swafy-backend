@@ -2,13 +2,11 @@
 const router = express.Router();
 const pool = require("../config/db");
 
-// GET /api/events/stats-gouvernorat?year=YYYY
+// ✅ GET /api/events/stats-gouvernorat?year=YYYY
 router.get("/stats-gouvernorat", async (req, res) => {
   try {
     const y = req.query.year || new Date().getFullYear();
-    // GET /api/events/stats-gouvernorat?year=YYYY
     console.log("STATS GOUVERNORAT - année =", y);
-
 
     const [rows] = await pool.query(
       "SELECT id_gouvernorat, COUNT(*) AS total FROM evenement WHERE YEAR(date_evenement) = ? GROUP BY id_gouvernorat",
@@ -28,10 +26,11 @@ router.get("/stats-gouvernorat", async (req, res) => {
   }
 });
 
-// POST /api/events  ou  /api/events/add
+// ✅ POST /api/events  ou  /api/events/add
 async function addEventHandler(req, res) {
   try {
     console.log("BODY ADD EVENT:", req.body);
+
     const { titre_evenement, id_gouvernorat, date_evenement } = req.body;
 
     if (!titre_evenement || !date_evenement || !id_gouvernorat) {
@@ -49,16 +48,20 @@ async function addEventHandler(req, res) {
 
     console.log("Inserted id =", result.insertId);
 
-    res.status(201).json({
-      message: "Evenement ajoute",
+    return res.status(201).json({
+      message: "Événement ajouté avec succès",
       id_evenement: result.insertId,
     });
   } catch (e) {
-    console.error("addEvent error:", e);
-    res.status(500).json({ mcdessage: "Erreur serveur", error: e.message });
+    console.error("SQL ERROR ADD EVENT >>>", e);
+    return res.status(500).json({
+      message: "Erreur SQL lors de l'ajout de l'événement",
+      error: e.sqlMessage || e.message,
+    });
   }
 }
 
+// ✅ Routes
 router.post("/", addEventHandler);
 router.post("/add", addEventHandler);
 
