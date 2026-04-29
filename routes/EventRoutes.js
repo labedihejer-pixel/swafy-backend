@@ -40,7 +40,12 @@ async function addEventHandler(req, res) {
         received: req.body,
       });
     }
-
+    console.log("DEBUG TYPES:", {
+    titre_evenement,
+    id_gouvernorat,
+    type_id_gouvernorat: typeof id_gouvernorat,
+    date_evenement,
+  });
     const [result] = await pool.query(
       "INSERT INTO evenement (titre_evenement, date_evenement, id_gouvernorat) VALUES (?, ?, ?)",
       [titre_evenement, date_evenement, id_gouvernorat]
