@@ -2,11 +2,13 @@
 const router = express.Router();
 const pool = require("../config/db");
 
-// GET /api/events/stats-wilaya?year=YYYY
-router.get("/stats-wilaya", async (req, res) => {
+// GET /api/events/stats-gouvernorat?year=YYYY
+router.get("/stats-gouvernorat", async (req, res) => {
   try {
     const y = req.query.year || new Date().getFullYear();
-    console.log("STATS WILAYA year =", y);
+    // GET /api/events/stats-gouvernorat?year=YYYY
+    console.log("STATS GOUVERNORAT - année =", y);
+
 
     const [rows] = await pool.query(
       "SELECT id_gouvernorat, COUNT(*) AS total FROM evenement WHERE YEAR(date_evenement) = ? GROUP BY id_gouvernorat",
@@ -21,7 +23,7 @@ router.get("/stats-wilaya", async (req, res) => {
 
     res.json(totals.map((t, i) => ({ id_gouvernorat: i + 1, total: t })));
   } catch (e) {
-    console.error("stats-wilaya error:", e);
+    console.error("stats-gouvernorat error:", e);
     res.status(500).json({ message: "Erreur serveur", error: e.message });
   }
 });
