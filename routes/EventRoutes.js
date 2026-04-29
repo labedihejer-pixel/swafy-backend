@@ -31,18 +31,16 @@ async function addEventHandler(req, res) {
   try {
     console.log("BODY ADD EVENT:", req.body);
 
-    // ✅ 1) تعريف أولاً
+    // ✅ تعريف المتغيّرات لازم يكون قبل أي استعمال
     const { titre_evenement, id_gouvernorat, date_evenement, id_user } = req.body;
 
-    // ✅ 2) تحويل id_gouvernorat لعدد
     const govId = parseInt(id_gouvernorat, 10);
 
-    // ✅ 3) debug بعد التعريف
+    // ✅ توا تنجم تعمل debug
     console.log("DEBUG TYPES:", {
       titre_evenement,
       id_gouvernorat,
       govId,
-      type_id_gouvernorat: typeof id_gouvernorat,
       date_evenement,
       id_user,
     });
@@ -66,7 +64,6 @@ async function addEventHandler(req, res) {
       message: "Événement ajouté avec succès",
       id_evenement: result.insertId,
     });
-
   } catch (e) {
     console.error("ADD EVENT ERROR >>>", e);
 
@@ -86,7 +83,6 @@ async function addEventHandler(req, res) {
     });
   }
 }
-
 
 // ✅ Routes
 router.post("/", addEventHandler);
