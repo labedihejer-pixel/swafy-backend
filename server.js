@@ -13,6 +13,8 @@ const liveRoutes = require("./routes/LiveRoutes");
 const archiveRoutes = require("./routes/ArchiveRoutes");
 const meetRoutes = require("./routes/MeetRoutes");
 const userRoutes = require("./routes/UserRoutes");
+const gouvernoratRoutes = require("./routes/GouvernoratRoutes");
+
 
 const app = express();
 const server = http.createServer(app);
@@ -41,7 +43,6 @@ app.use(
   })
 );
 
-
 app.use(express.json());
 
 // ===============================
@@ -53,6 +54,8 @@ app.use("/api/lives", liveRoutes);
 app.use("/api/archive", archiveRoutes);
 app.use("/api/meet", meetRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/gouvernorats", gouvernoratRoutes);
+
 
 // ✅ Test route (مرة وحدة فقط)
 app.get("/", (req, res) => {

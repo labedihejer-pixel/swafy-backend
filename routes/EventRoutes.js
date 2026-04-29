@@ -30,6 +30,13 @@ router.get("/stats-gouvernorat", async (req, res) => {
 async function addEventHandler(req, res) {
   try {
     console.log("BODY ADD EVENT:", req.body);
+    console.log("DEBUG TYPES:", {
+    titre_evenement,
+    id_gouvernorat,
+    type_id_gouvernorat: typeof id_gouvernorat,
+    date_evenement,
+  });
+
 
     const { titre_evenement, id_gouvernorat, date_evenement } = req.body;
 
