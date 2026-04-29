@@ -1,6 +1,7 @@
 ﻿const express = require("express");
 const router = express.Router();
 const pool = require("../config/db");
+console.log("✅ EventRoutes version: 2026-04-29 v3");
 
 // ✅ GET /api/events/stats-gouvernorat?year=YYYY
 router.get("/stats-gouvernorat", async (req, res) => {
@@ -26,52 +27,66 @@ router.get("/stats-gouvernorat", async (req, res) => {
   }
 });
 
-// ✅ POST /api/events  ou  /api/events/add
 async function addEventHandler(req, res) {
   try {
     console.log("BODY ADD EVENT:", req.body);
+
+    // ✅ 1) تعريف أولاً
+    const { titre_evenement, id_gouvernorat, date_evenement, id_user } = req.body;
+
+    // ✅ 2) تحويل id_gouvernorat لعدد
+    const govId = parseInt(id_gouvernorat, 10);
+
+    // ✅ 3) debug بعد التعريف
     console.log("DEBUG TYPES:", {
-    titre_evenement,
-    id_gouvernorat,
-    type_id_gouvernorat: typeof id_gouvernorat,
-    date_evenement,
-  });
+      titre_evenement,
+      id_gouvernorat,
+      govId,
+      type_id_gouvernorat: typeof id_gouvernorat,
+      date_evenement,
+      id_user,
+    });
 
-
-    const { titre_evenement, id_gouvernorat, date_evenement } = req.body;
-
-    if (!titre_evenement || !date_evenement || !id_gouvernorat) {
+    if (!titre_evenement || !date_evenement || !govId) {
       return res.status(400).json({
         message: "Champs obligatoires manquants",
         required: ["titre_evenement", "id_gouvernorat", "date_evenement"],
         received: req.body,
       });
     }
-    console.log("DEBUG TYPES:", {
-    titre_evenement,
-    id_gouvernorat,
-    type_id_gouvernorat: typeof id_gouvernorat,
-    date_evenement,
-  });
+
     const [result] = await pool.query(
       "INSERT INTO evenement (titre_evenement, date_evenement, id_gouvernorat) VALUES (?, ?, ?)",
-      [titre_evenement, date_evenement, id_gouvernorat]
+      [titre_evenement, date_evenement, govId]
     );
 
-    console.log("Inserted id =", result.insertId);
+    console.log("✅ INSERT OK, insertId =", result.insertId);
 
     return res.status(201).json({
       message: "Événement ajouté avec succès",
       id_evenement: result.insertId,
     });
+
   } catch (e) {
-    console.error("SQL ERROR ADD EVENT >>>", e);
+    console.error("ADD EVENT ERROR >>>", e);
+
+    if (e.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        message: "⚠️ Événement déjà existant (doublon)",
+        code: e.code,
+        sqlMessage: e.sqlMessage,
+      });
+    }
+
     return res.status(500).json({
-      message: "Erreur SQL lors de l'ajout de l'événement",
-      error: e.sqlMessage || e.message,
+      message: "Erreur lors de l'ajout de l'événement",
+      code: e.code,
+      sqlMessage: e.sqlMessage,
+      error: e.message,
     });
   }
 }
+
 
 // ✅ Routes
 router.post("/", addEventHandler);
