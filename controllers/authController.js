@@ -110,10 +110,8 @@ const register = async (req, res) => {
   }
 };
 
+const nodemailer = require("nodemailer");
 
-// ===============================
-// ✅ SEND PASSWORD CODE (TEST MODE)
-// ===============================
 const sendPassword = async (req, res) => {
   try {
     const { email_user } = req.body;
@@ -122,17 +120,38 @@ const sendPassword = async (req, res) => {
       return res.status(400).json({ message: "Email requis" });
     }
 
-    console.log("📩 TEST sendPassword pour:", email_user);
+    // ✅ كود عشوائي
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // ✅ test فقط (بلا email)
-    res.json({
-      success: true,
-      message: "Code envoyé (TEST MODE)",
-      code: "123456" // ✅ كود ثابت للتجربة
+    // ✅ Transporter Mailtrap
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
     });
+
+    // ✅ إرسال الإيميل
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email_user,
+      subject: "Code de vérification - Swafy",
+      html: `
+        <h2>Bienvenue sur Swafy</h2>
+        <p>Votre code de vérification est :</p>
+        <h1>${code}</h1>
+      `,
+    });
+
+    console.log("📩 Email envoyé via Mailtrap à:", email_user);
+
+    res.json({ success: true, message: "Code envoyé" });
+
   } catch (err) {
-    console.error("sendPassword error:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    console.error("❌ sendPassword error:", err);
+    res.status(500).json({ message: "Erreur envoi email" });
   }
 };
 
