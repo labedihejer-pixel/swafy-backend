@@ -2,12 +2,24 @@ const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const pool = require("../config/db");
-const { login, register } = require("../controllers/authController");
 
+// ✅ IMPORT من authController (نفس الاسم)
+const {
+  login,
+  register,
+  sendPassword,
+  verifyCode,
+  registerFinal
+} = require("../controllers/authController");
+
+// ✅ ROUTES AUTH
 router.post("/login", login);
 router.post("/register", register);
+router.post("/send-password-code", sendPassword);
+router.post("/verify-code", verifyCode);
+router.post("/register-final", registerFinal);
 
-// ✅ ROUTE /me (JOIN بين الجدولين)
+// ✅ ROUTE /me
 router.get("/me", async (req, res) => {
   const authHeader = req.headers.authorization;
 
@@ -20,7 +32,6 @@ router.get("/me", async (req, res) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // ✅ نجمعو البيانات من utilisateurs و jeune_profiles
     const [rows] = await pool.query(
       `SELECT 
         u.id_user, u.nom_user, u.email_user, u.role, u.status_user,

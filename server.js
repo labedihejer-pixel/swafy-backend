@@ -14,7 +14,9 @@ const archiveRoutes = require("./routes/ArchiveRoutes");
 const meetRoutes = require("./routes/MeetRoutes");
 const userRoutes = require("./routes/UserRoutes");
 const gouvernoratRoutes = require("./routes/GouvernoratRoutes");
-
+const enqueteRoutes = require("./routes/EnqueteRoutes");
+const parametreRoutes = require("./routes/ParametreRoutes");
+const publicationRoutes = require("./routes/PublicationRoutes");
 
 const app = express();
 const server = http.createServer(app);
@@ -53,8 +55,12 @@ app.use("/api/events", eventRoutes);
 app.use("/api/lives", liveRoutes);
 app.use("/api/archive", archiveRoutes);
 app.use("/api/meet", meetRoutes);
-app.use("/api/users", userRoutes);
+app.use("/api/users/count/jeune-profiles", userRoutes);
 app.use("/api/gouvernorats", gouvernoratRoutes);
+app.use("/api/enquetes", enqueteRoutes);
+app.use("/api/settings", parametreRoutes);
+app.use("/api/publications", publicationRoutes);
+app.use("/uploads", express.static("uploads"));
 
 
 
@@ -221,4 +227,5 @@ seedAdmin();
 server.listen(PORT, () => {
   console.log(`✅ Serveur lancé sur http://localhost:${PORT}`);
 });
+
 

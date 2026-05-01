@@ -110,4 +110,96 @@ const register = async (req, res) => {
   }
 };
 
-module.exports = { login, register, seedAdmin };
+
+// ===============================
+// ✅ SEND PASSWORD CODE (TEST MODE)
+// ===============================
+const sendPassword = async (req, res) => {
+  try {
+    const { email_user } = req.body;
+
+    if (!email_user) {
+      return res.status(400).json({ message: "Email requis" });
+    }
+
+    console.log("📩 TEST sendPassword pour:", email_user);
+
+    // ✅ test فقط (بلا email)
+    res.json({
+      success: true,
+      message: "Code envoyé (TEST MODE)",
+      code: "123456" // ✅ كود ثابت للتجربة
+    });
+  } catch (err) {
+    console.error("sendPassword error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// ===============================
+// ✅ VERIFY CODE (TEST MODE)
+// ===============================
+const verifyCode = async (req, res) => {
+  try {
+    const { email_user, code } = req.body;
+
+    if (code !== "123456") {
+      return res.status(401).json({ message: "Code incorrect" });
+    }
+
+    const [rows] = await db.query(
+      "SELECT * FROM utilisateurs WHERE email_user = ?",
+      [email_user]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: "Utilisateur introuvable" });
+    }
+
+    const user = rows[0];
+
+    const token = jwt.sign(
+      {
+        id_user: user.id_user,
+        email_user: user.email_user,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id_user: user.id_user,
+        email_user: user.email_user,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error("verifyCode error:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// ===============================
+// ✅ REGISTER FINAL (TEST MODE)
+// ===============================
+const registerFinal = async (req, res) => {
+  try {
+    res.json({ success: true, message: "Register final OK (TEST MODE)" });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+
+module.exports = {
+  login,
+  register,
+  seedAdmin,
+  sendPassword,
+  verifyCode,
+  registerFinal
+};
