@@ -113,6 +113,7 @@ const register = async (req, res) => {
 const nodemailer = require("nodemailer");
 
 const sendPassword = async (req, res) => {
+   console.log("🔥 REAL MAILTRAP VERSION LOADED 🔥");
   try {
     const { email_user } = req.body;
 
