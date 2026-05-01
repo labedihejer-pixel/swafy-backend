@@ -165,21 +165,28 @@ const verifyCode = async (req, res) => {
   try {
     const { email_user, code } = req.body;
 
-    if (code !== "123456") {
-      return res.status(401).json({ message: "Code incorrect" });
-    }
-
+    // ✅ نثبت الكود + الوقت
     const [rows] = await db.query(
-      "SELECT * FROM utilisateurs WHERE email_user = ?",
-      [email_user]
+      `SELECT * FROM utilisateurs 
+       WHERE email_user = ? 
+       AND verification_code = ? 
+       AND verification_expires > NOW()`,
+      [email_user, code]
     );
 
     if (!rows.length) {
-      return res.status(404).json({ message: "Utilisateur introuvable" });
+      return res.status(401).json({ message: "Code incorrect ou expiré" });
     }
 
     const user = rows[0];
 
+    // ✅ نمسحو الكود بعد التحقّق
+    await db.query(
+      "UPDATE utilisateurs SET verification_code = NULL, verification_expires = NULL WHERE email_user = ?",
+      [email_user]
+    );
+
+    // ✅ token
     const token = jwt.sign(
       {
         id_user: user.id_user,
@@ -198,12 +205,12 @@ const verifyCode = async (req, res) => {
         role: user.role,
       },
     });
+
   } catch (err) {
-    console.error("verifyCode error:", err);
+    console.error("❌ verifyCode error:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
-
 // ===============================
 // ✅ REGISTER FINAL (TEST MODE)
 // ===============================
