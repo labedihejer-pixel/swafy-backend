@@ -122,7 +122,10 @@ const sendPassword = async (req, res) => {
 
     // ✅ كود عشوائي
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-
+    await db.query(
+  "UPDATE utilisateurs SET verification_code = ?, verification_expires = DATE_ADD(NOW(), INTERVAL 10 MINUTE) WHERE email_user = ?",
+  [code, email_user]
+);
     // ✅ Transporter Mailtrap
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
