@@ -17,7 +17,7 @@ const gouvernoratRoutes = require("./routes/GouvernoratRoutes");
 const enqueteRoutes = require("./routes/EnqueteRoutes");
 const parametreRoutes = require("./routes/ParametreRoutes");
 const publicationRoutes = require("./routes/PublicationRoutes");
-
+const notificationRoutes = require("./routes/NotificationRoutes");
 const app = express();
 const server = http.createServer(app);
 
@@ -27,11 +27,7 @@ const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 const LIVE_SECRET = process.env.LIVE_SECRET || process.env.JWT_SECRET;
 
-// ✅ Frontends autorisés
-const ALLOWED_ORIGINS = [
-  "http://localhost:5173",
-  "https://finale-scalping-overstuff.ngrok-free.dev",
-];
+app.use(cors({ origin: "*" }));
 
 // ===============================
 // ✅ MIDDLEWARE
@@ -55,13 +51,13 @@ app.use("/api/events", eventRoutes);
 app.use("/api/lives", liveRoutes);
 app.use("/api/archive", archiveRoutes);
 app.use("/api/meet", meetRoutes);
-app.use("/api/users/count/jeune-profiles", userRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/gouvernorats", gouvernoratRoutes);
 app.use("/api/enquetes", enqueteRoutes);
 app.use("/api/settings", parametreRoutes);
 app.use("/api/publications", publicationRoutes);
 app.use("/uploads", express.static("uploads"));
-
+app.use("/api/notifications", notificationRoutes);
 
 
 // ✅ Test route (مرة وحدة فقط)
