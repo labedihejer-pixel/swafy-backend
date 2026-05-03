@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
 
-// ✅ Vérifier le token JWT
 const verifyToken = (req, res, next) => {
   const header = req.headers.authorization;
 
@@ -9,7 +8,6 @@ const verifyToken = (req, res, next) => {
   }
 
   const token = header.split(" ")[1];
-
   if (!token) {
     return res.status(401).json({ message: "Token invalide" });
   }
@@ -18,18 +16,26 @@ const verifyToken = (req, res, next) => {
     if (err) {
       return res.status(403).json({ message: "Token invalide ou expiré" });
     }
-   req.user = decoded;
 
-// ✅ نطبع userId باش backend يفهمو
-req.user.id_user = decoded.id_user || decoded.id || decoded.userId;
+    // ✅ نركّب user structure واضحة
+    const userId = decoded.id_user || decoded.id || decoded.userId;
 
-next();
+    if (!userId) {
+      console.error("❌ verifyToken: id_user absent dans token", decoded);
+      return res.status(401).json({ message: "Token invalide (user id manquant)" });
+    }
 
+    req.user = {
+      ...decoded,
+      id_user: userId
+    };
 
+    console.log("✅ verifyToken OK, userId =", req.user.id_user);
+
+    next();
   });
 };
 
-// ✅ Vérifier le rôle
 const verifyRole = (role) => {
   return (req, res, next) => {
     if (!req.user || req.user.role !== role) {
@@ -39,7 +45,7 @@ const verifyRole = (role) => {
   };
 };
 
-// ✅ Exports compatibles avec tous les usages
-module.exports = verifyToken;
-module.exports.verifyToken = verifyToken;
-module.exports.verifyRole = verifyRole;
+module.exports = {
+  verifyToken,
+  verifyRole,
+};

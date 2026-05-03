@@ -15,7 +15,7 @@ const {
 // ✅ ROUTES AUTH
 router.post("/login", login);
 router.post("/register", register);
-router.post("/send-password-code", sendPassword);
+router.post("/send-password-code-v2", sendPassword);
 router.post("/verify-code", verifyCode);
 router.post("/register-final", registerFinal);
 

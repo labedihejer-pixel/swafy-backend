@@ -24,15 +24,14 @@ const seedAdmin = async () => {
   console.log("✅ ADMIN SEEDED SUCCESSFULLY (admin@gmail.com / adminadmin)");
 };
 
-// ===============================
-// ✅ LOGIN
-// ===============================
+
+
 const login = async (req, res) => {
   try {
     const { email_user, mot_de_passe_user } = req.body;
 
     if (!email_user || !mot_de_passe_user) {
-      return res.status(400).json({ message: "Email et mot de passe requis" });
+      return res.status(401).json({ message: "Email ou mot de passe incorrect" });
     }
 
     const [rows] = await db.query(
@@ -40,7 +39,7 @@ const login = async (req, res) => {
       [email_user]
     );
 
-    if (rows.length === 0) {
+    if (!rows.length) {
       return res.status(401).json({ message: "Email ou mot de passe incorrect" });
     }
 
@@ -60,22 +59,14 @@ const login = async (req, res) => {
         id_user: user.id_user,
         email_user: user.email_user,
         role: user.role,
-        nom_user: user.nom_user,
       },
       process.env.JWT_SECRET,
       { expiresIn: "24h" }
     );
 
-    res.json({
-      token,
-      user: {
-        id_user: user.id_user,
-        email_user: user.email_user,
-        role: user.role,
-      },
-    });
+    res.json({ token, user });
   } catch (err) {
-    console.error(err);
+    console.error("LOGIN ERROR:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
@@ -213,17 +204,75 @@ const verifyCode = async (req, res) => {
   }
 };
 // ===============================
-// ✅ REGISTER FINAL (TEST MODE)
+// ✅ REGISTER FINAL (PRODUCTION)
 // ===============================
 const registerFinal = async (req, res) => {
+  const {
+    nom_user,
+    prenom_user,
+    date_naissance,
+    sexe,
+    gouvernorat,
+    delegation,
+    ville,
+    etablissement,
+    statut,
+    email_user,
+    mot_de_passe_user
+  } = req.body;
+
   try {
-    res.json({ success: true, message: "Register final OK (TEST MODE)" });
+    // ✅ 0️⃣ تشفير كلمة السر
+    const hashedPassword = await bcrypt.hash(mot_de_passe_user, 10);
+
+    // ✅ 1️⃣ INSERT utilisateur
+    const [result] = await db.query(
+      `INSERT INTO utilisateurs
+       (nom_user, prenom_user, date_naissance, sexe,
+        email_user, mot_de_passe_user, role, status_user)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        nom_user,
+        prenom_user,
+        date_naissance,
+        sexe,
+        email_user,
+        hashedPassword,
+        "jeune",
+        "actif"
+      ]
+    );
+
+    const userId = result.insertId; // ✅ id_user
+
+    // ✅ 2️⃣ INSERT dans jeune_profiles
+    await db.query(
+      `INSERT INTO jeune_profiles
+       (user_id, gouvernorat_jeune, delegation, ville, etablissement, statut, date_naissance, sexe)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        userId,
+        gouvernorat,
+        delegation,
+        ville,
+        etablissement,
+        statut,
+        date_naissance,
+        sexe
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "✅ Inscription jeune réussie",
+      id_user: userId
+    });
+
   } catch (err) {
-    res.status(500).json({ message: "Erreur serveur" });
+    console.error("❌ registerFinal error:", err);
+    res.status(500).json({ message: "Erreur serveur inscription" });
   }
 };
-
-
 
 module.exports = {
   login,

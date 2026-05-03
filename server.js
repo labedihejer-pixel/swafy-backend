@@ -20,6 +20,8 @@ const publicationRoutes = require("./routes/PublicationRoutes");
 const notificationRoutes = require("./routes/NotificationRoutes");
 const app = express();
 const server = http.createServer(app);
+const messengerRoutes = require("./routes/messengerRoutes");
+
 
 // ===============================
 // ✅ CONFIG
@@ -58,7 +60,7 @@ app.use("/api/settings", parametreRoutes);
 app.use("/api/publications", publicationRoutes);
 app.use("/uploads", express.static("uploads"));
 app.use("/api/notifications", notificationRoutes);
-
+app.use("/api/messages", messengerRoutes);
 
 // ✅ Test route (مرة وحدة فقط)
 app.get("/", (req, res) => {
@@ -223,5 +225,24 @@ seedAdmin();
 server.listen(PORT, () => {
   console.log(`✅ Serveur lancé sur http://localhost:${PORT}`);
 });
+db.query(`
+CREATE TABLE IF NOT EXISTS notifications (
+  id_notification INT NOT NULL AUTO_INCREMENT,
+  id_user_to INT NOT NULL,
+  id_user_from INT DEFAULT NULL,
+  type_notification VARCHAR(50) NOT NULL,
+  entity_type VARCHAR(50) NOT NULL,
+  entity_id INT NOT NULL,
+  message VARCHAR(255) NOT NULL,
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+  PRIMARY KEY (id_notification),
+  KEY idx_notification_user_to (id_user_to),
+  KEY idx_notification_user_from (id_user_from),
+  KEY idx_notification_entity (entity_type, entity_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`)
+.then(() => console.log("✅ notifications table ready"))
+.catch(err => console.error("❌ notifications table error", err));
 
