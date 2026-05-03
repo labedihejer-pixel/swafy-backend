@@ -3,40 +3,36 @@ const router = express.Router();
 
 const PublicationController = require("../controllers/PublicationController");
 const { verifyToken } = require("../middleware/authMiddleware");
+const { adminOnly } = require("../middleware/adminMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 
-// ✅ CREATE publication (protected)
-router.post(
-  "/",
-  verifyToken,
-  (req, res, next) => {
-    upload.array("files", 10)(req, res, (err) => {
-      if (err) {
-        console.error("Upload error:", err);
-        return res.status(400).json({ message: err.message });
-      }
-      next();
-    });
-  },
-  PublicationController.createPublication
-);
-router.get("/", PublicationController.getAllPublications);
-// ✅ PUBLIC – أي واحد ينجم يشوف publications
+/* PUBLICATIONS */
+router.post("/", verifyToken, adminOnly, upload.array("files", 10), PublicationController.createPublication);
 router.get("/public", PublicationController.getAllPublications);
 
-// ✅ GET one publication (protected)
-router.get("/:id", verifyToken, PublicationController.getOnePublication);
-
-// ✅ COMMENTS
+/* COMMENTS */
+router.post("/comment", verifyToken, PublicationController.addComment);
 router.get("/:id/comments", verifyToken, PublicationController.getCommentaires);
-
-// ✅ REACTIONS / ACTIONS
+router.post("/comment", verifyToken, PublicationController.addComment);
+/* REACTIONS */
 router.post("/react", verifyToken, PublicationController.addReaction);
-router.post("/comment", verifyToken, PublicationController.addCommentaire);
-router.post("/vote", verifyToken, PublicationController.voteDebat);
 router.post("/comment-react", verifyToken, PublicationController.addCommentReaction);
+/* ======================================================
+   REACTIONS
+====================================================== */
 
-// ✅ DELETE
-router.delete("/:id", verifyToken, PublicationController.deletePublication);
+// ✅ ADD / UPDATE reaction on a comment (JEUNE + ADMIN)
+/*router.post(
+  "/comment/:id/reaction",
+  verifyToken,
+  PublicationController.addCommentReaction
+);*/
+
+// ✅ VOTE debat (JEUNE + ADMIN)
+/*router.post(
+  "/:id/vote",
+  verifyToken,
+  PublicationController.voteDebat
+);*/
 
 module.exports = router;
