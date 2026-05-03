@@ -5,6 +5,11 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const db = require("./config/db");
+const PORT = process.env.PORT || 10000;
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Serveur lancé sur port ${PORT}`);
+});
 // Routes
 const { seedAdmin } = require("./controllers/authController");
 const authRoutes = require("./routes/authRoutes");
