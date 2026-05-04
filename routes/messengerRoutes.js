@@ -53,6 +53,17 @@ router.post("/conversation", verifyToken, async (req, res) => {
     const userRole = req.user.role;
     const { targetId } = req.body;
 
+    // ✅ protections (باش ما يطيّحش 500)
+    if (!targetId) {
+      return res.status(400).json({ message: "targetId manquant" });
+    }
+
+    if (Number(targetId) === Number(userId)) {
+      return res
+        .status(400)
+        .json({ message: "Conversation avec soi-même interdite" });
+    }
+
     // ✅ jeune ينجم يبعث كان للإدمن
     if (userRole === "jeune") {
       const [admins] = await db.query(
@@ -61,7 +72,9 @@ router.post("/conversation", verifyToken, async (req, res) => {
       );
 
       if (admins.length === 0) {
-        return res.status(403).json({ message: "Jeune peut contacter seulement admin" });
+        return res
+          .status(403)
+          .json({ message: "Jeune peut contacter seulement admin" });
       }
     }
 
@@ -87,9 +100,11 @@ router.post("/conversation", verifyToken, async (req, res) => {
 
     res.json(conv[0]);
   } catch (err) {
+    console.error("conversation error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // POST بعث message
 router.post("/messages", verifyToken, async (req, res) => {
