@@ -116,5 +116,26 @@ router.get("/:id", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 });
+// ✅ GET all jeunes
+router.get("/", verifyToken, async (req, res) => {
+  try {
+    const role = req.query.role;
+
+    if (role === "jeune") {
+      const [rows] = await db.query(
+        "SELECT id_user, nom_user, prenom_user, email_user FROM utilisateurs WHERE role = 'jeune'"
+      );
+      return res.json(rows);
+    }
+
+    // fallback (admins / all users if needed)
+    const [rows] = await db.query(
+      "SELECT id_user, nom_user, prenom_user, email_user, role FROM utilisateurs"
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;
