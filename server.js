@@ -184,112 +184,127 @@ messageNamespace.on("connection", (socket) => {
   });
 });
 
-// ===============================
-// ✅ SOCKET.IO - LIVE NAMESPACE (Original)
-// ===============================
-async function validateLiveSocketAccess(roomCode, accessToken, role) {
-  try {
-    const decoded = jwt.verify(accessToken, LIVE_SECRET);
-    if (decoded.type !== "live")
-      return { ok: false, message: "Token live invalide" };
-    if (decoded.roomCode !== roomCode)
-      return { ok: false, message: "Room non autorisée" };
-    if (decoded.role !== role)
-      return { ok: false, message: "Rôle non autorisé" };
+/// Dans votre server.js - Modifiez la partie Socket.io
 
-    const [rows] = await db.execute(
-      "SELECT * FROM lives WHERE room_code = ? LIMIT 1",
-      [roomCode]
-    );
-    if (!rows.length) return { ok: false, message: "Live introuvable" };
 
-    const live = rows[0];
-    if (!live.is_active) return { ok: false, message: "Live terminé" };
-    if (live.expires_at && new Date(live.expires_at) < new Date())
-      return { ok: false, message: "Lien expiré" };
-    if (Number(decoded.v) !== Number(live.token_version || 1))
-      return { ok: false, message: "Lien expiré ou remplacé" };
-    if (
-      role === "host" &&
-      decoded.userId &&
-      live.host_user_id &&
-      Number(decoded.userId) !== Number(live.host_user_id)
-    ) {
-      return { ok: false, message: "Host non autorisé" };
-    }
-    return { ok: true, decoded, live };
-  } catch (err) {
-    return { ok: false, message: "Accès socket refusé" };
-  }
-}
+// Garder trace des utilisateurs connectés
+const onlineUsers = new Map(); // userId -> socketId
+const socketUserMap = new Map(); // socketId -> userId
 
-function leaveRoom(socket) {
-  const roomCode = socketRoomMap[socket.id];
-  if (!roomCode) return;
-  if (roomUsers[roomCode]) {
-    roomUsers[roomCode] = roomUsers[roomCode].filter(
-      (u) => u.socketId !== socket.id
-    );
-    socket.to(roomCode).emit("user-left", { socketId: socket.id });
-    if (roomUsers[roomCode].length === 0) delete roomUsers[roomCode];
-  }
-  delete socketRoomMap[socket.id];
-  socket.leave(roomCode);
-}
-
-// ✅ Main namespace للـ Live
 io.on("connection", (socket) => {
-  console.log("✅ [Live] Socket connecté:", socket.id);
+  console.log("✅ Socket connecté:", socket.id);
 
-  socket.on("join-room", async (payload, ack = () => {}) => {
+  // Authentification de l'utilisateur
+  socket.on("authenticate", ({ userId, token }) => {
     try {
-      const { roomCode, userName, role = "guest", accessToken } = payload || {};
-      if (!roomCode || !accessToken) {
-        ack({ ok: false, message: "Données manquantes" });
-        return;
-      }
-      const check = await validateLiveSocketAccess(roomCode, accessToken, role);
-      if (!check.ok) {
-        ack({ ok: false, message: check.message });
-        return;
-      }
-
-      socket.join(roomCode);
-      socketRoomMap[socket.id] = roomCode;
-      socket.data.roomCode = roomCode;
-      socket.data.role = role;
-      socket.data.userName = userName || "Invité";
-
-      if (!roomUsers[roomCode]) roomUsers[roomCode] = [];
-      roomUsers[roomCode].push({
-        socketId: socket.id,
-        userName: socket.data.userName,
-        role,
-      });
-      ack({ ok: true });
+      // Vérifiez le token si nécessaire
+      // const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      
+      // Enregistrer l'utilisateur comme connecté
+      onlineUsers.set(parseInt(userId), socket.id);
+      socketUserMap.set(socket.id, parseInt(userId));
+      
+      console.log(`Utilisateur ${userId} authentifié et en ligne`);
+      io.emit("user_status", { userId, status: "online" });
     } catch (err) {
-      console.error("join-room error:", err);
-      ack({ ok: false, message: "Erreur serveur socket" });
+      console.error("Erreur d'authentification:", err);
     }
   });
 
-  socket.on("send-message", ({ roomCode, message }) => {
-    if (!socket.data?.roomCode) return;
-    if (socket.data.roomCode !== roomCode) return;
-    io.to(roomCode).emit("receive-message", {
-      user: socket.data.userName || "Invité",
-      text: message,
-      time: new Date().toLocaleTimeString(),
-    });
+  // Envoi de message privé
+  socket.on("send_message", async (messageData) => {
+    try {
+      const { senderId, receiverId, message, conversationId } = messageData;
+      console.log(`Message de ${senderId} à ${receiverId}: ${message}`);
+      
+      // Enregistrer le message dans la base de données
+      const [result] = await db.execute(
+        "INSERT INTO messages (conversation_id, sender_id, receiver_id, content, created_at) VALUES (?, ?, ?, ?, NOW())",
+        [conversationId, senderId, receiverId, message]
+      );
+      
+      const messageId = result.insertId;
+      
+      // Créer une notification pour le destinataire
+      await db.execute(
+        "INSERT INTO notifications (id_user_to, id_user_from, type_notification, entity_type, entity_id, message) VALUES (?, ?, ?, ?, ?, ?)",
+        [receiverId, senderId, "message", "message", messageId, `Vous avez reçu un nouveau message`]
+      );
+      
+      // Envoyer le message au destinataire en temps réel s'il est connecté
+      if (onlineUsers.has(parseInt(receiverId))) {
+        const receiverSocketId = onlineUsers.get(parseInt(receiverId));
+        io.to(receiverSocketId).emit("receive_message", {
+          messageId,
+          conversationId,
+          senderId,
+          message,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Envoyer aussi une notification
+        io.to(receiverSocketId).emit("notification", {
+          type: "message",
+          senderId,
+          message: `Nouveau message reçu`
+        });
+      }
+      
+      // Confirmation au sender
+      socket.emit("message_sent", { 
+        success: true, 
+        messageId,
+        conversationId,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (err) {
+      console.error("Erreur d'envoi de message:", err);
+      socket.emit("message_sent", { success: false, error: "Échec d'envoi du message" });
+    }
   });
 
-  socket.on("leave-room", () => leaveRoom(socket));
+  // Marquage des messages comme lus
+  socket.on("mark_as_read", async ({ conversationId, userId }) => {
+    try {
+      await db.execute(
+        "UPDATE messages SET is_read = 1 WHERE conversation_id = ? AND receiver_id = ? AND is_read = 0",
+        [conversationId, userId]
+      );
+      
+      // Informer l'expéditeur que ses messages ont été lus
+      const [messages] = await db.execute(
+        "SELECT sender_id FROM messages WHERE conversation_id = ? AND receiver_id = ? GROUP BY sender_id",
+        [conversationId, userId]
+      );
+      
+      messages.forEach(message => {
+        const senderId = message.sender_id;
+        if (onlineUsers.has(parseInt(senderId))) {
+          io.to(onlineUsers.get(parseInt(senderId))).emit("messages_read", { conversationId, byUserId: userId });
+        }
+      });
+      
+    } catch (err) {
+      console.error("Erreur de marquage des messages comme lus:", err);
+    }
+  });
+
+  // Déconnexion
   socket.on("disconnect", () => {
-    leaveRoom(socket);
-    console.log("❌ [Live] Socket déconnecté:", socket.id);
+    const userId = socketUserMap.get(socket.id);
+    if (userId) {
+      console.log(`Utilisateur ${userId} déconnecté`);
+      onlineUsers.delete(userId);
+      socketUserMap.delete(socket.id);
+      io.emit("user_status", { userId, status: "offline" });
+    }
+    console.log("❌ Socket déconnecté:", socket.id);
   });
 });
 
+// Garder les anciennes fonctionnalités pour la compatibilité
+// Conservez le reste de votre code socket pour les lives, etc.
 // ===============================
 // ✅ MESSENGER TABLES
 // ===============================

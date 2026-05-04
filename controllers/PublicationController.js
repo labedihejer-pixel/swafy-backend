@@ -1,32 +1,32 @@
 exports.createPublication = async (req, res) => {
   try {
-    // ✅ admin فقط
     if (req.user.role !== "admin") {
       return res.status(403).json({ message: "Admin uniquement" });
     }
 
-    const { titre_publication, contenu, question_debat, type_publication } = req.body;
+    const {
+      titre_publication,
+      contenu,
+      question_debat,
+      type_publication
+    } = req.body;
+
     const userId = req.user.id_user;
 
-    // ✅ protection
-    if (!type_publication) {
-      return res.status(400).json({ message: "type_publication obligatoire" });
-    }
-
-    // ✅ DEBUG (مهم برشة)
-    console.log("REQ BODY =", req.body);
-    console.log("REQ USER =", req.user);
+    // ✅ file (photo / video / pdf)
+    const mediaPath = req.file ? req.file.path : null;
 
     const [result] = await db.query(
       `INSERT INTO publications
-       (user_id, titre_publication, type_publication, contenu, question_debat, status_publication, date_publication)
-       VALUES (?, ?, ?, ?, ?, 'publie', NOW())`,
+       (user_id, titre_publication, type_publication, contenu, question_debat, media_path, status_publication, date_publication)
+       VALUES (?, ?, ?, ?, ?, ?, 'publie', NOW())`,
       [
         userId,
         titre_publication || null,
         type_publication,
         contenu || null,
-        question_debat || null
+        question_debat || null,
+        mediaPath
       ]
     );
 
@@ -36,7 +36,6 @@ exports.createPublication = async (req, res) => {
     });
 
   } catch (error) {
-    // ✅ هذا هو اللي لازم يتشوف في Render logs
     console.error("❌ createPublication error:", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
