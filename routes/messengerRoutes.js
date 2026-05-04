@@ -9,7 +9,7 @@ router.get("/conversations", verifyToken, async (req, res) => {
     const userId = req.user.id_user;
     const [rows] = await db.query(
       `SELECT mc.*, 
-        u.nom_user, u.prenom_user, u.photo_user,
+        u.nom_user, u.prenom_user,
         (SELECT text FROM messenger_messages mm 
          WHERE mm.conversation_id = mc.id 
          ORDER BY mm.created_at DESC LIMIT 1) as last_message,
@@ -34,7 +34,7 @@ router.get("/conversations", verifyToken, async (req, res) => {
 router.get("/messages/:conversationId", verifyToken, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT mm.*, u.nom_user, u.prenom_user, u.photo_user
+      `SELECT mm.*, u.nom_user, u.prenom_user, 
        FROM messenger_messages mm
        JOIN utilisateurs u ON mm.sender_id = u.id_user
        WHERE mm.conversation_id = ?
@@ -118,8 +118,8 @@ router.post("/messages", verifyToken, async (req, res) => {
     );
 
     const [msg] = await db.query(
-      `SELECT mm.*, u.nom_user, u.prenom_user, u.photo_user
-       FROM messenger_messages mm
+      `SELECT mm.*, u.nom_user, u.prenom_user
+      FROM messenger_messages mm
        JOIN utilisateurs u ON mm.sender_id = u.id_user
        WHERE mm.id = ?`,
       [result.insertId]
