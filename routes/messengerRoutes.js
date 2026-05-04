@@ -4,15 +4,49 @@ const db = require("../config/db");
 const { verifyToken } = require("../middleware/authMiddleware");
 
 // ═══════════════════════════════════════════════════════════════
+// 👨‍💼 GET /admins - قائمة الـ admins
+// ═══════════════════════════════════════════════════════════════
+router.get("/admins", verifyToken, async (req, res) => {
+  try {
+    console.log("📋 GET /admins called by user:", req.user?.id_user);
+
+    const [admins] = await db.query(
+      `SELECT id_user, nom_user, prenom_user, role 
+       FROM utilisateurs 
+       WHERE role = 'admin' 
+       ORDER BY nom_user ASC`
+    );
+
+    console.log(`✅ Found ${admins?.length || 0} admins`);
+
+    res.json(admins || []);
+
+  } catch (err) {
+    console.error("❌ GET /admins error:", {
+      message: err.message,
+      code: err.code,
+      sqlMessage: err.sqlMessage
+    });
+    
+    res.status(500).json({ 
+      error: "Failed to fetch admins",
+      message: err.message
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // 📋 GET /conversations - قائمة conversations
 // ═══════════════════════════════════════════════════════════════
 router.get("/conversations", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id_user;
     
+    console.log("📋 GET /conversations called by user:", userId);
+
     const [rows] = await db.query(
       `SELECT mc.id, mc.user_a_id, mc.user_b_id, mc.created_at,
-              u.id_user, u.nom_user, u.prenom_user, u.email,
+              u.id_user, u.nom_user, u.prenom_user,
               (SELECT text FROM messenger_messages 
                WHERE conversation_id = mc.id 
                ORDER BY created_at DESC LIMIT 1) as last_message,
@@ -26,13 +60,15 @@ router.get("/conversations", verifyToken, async (req, res) => {
            ELSE mc.user_a_id 
          END) = u.id_user
        WHERE mc.user_a_id = ? OR mc.user_b_id = ?
-       ORDER BY last_time DESC NULLS LAST`,
-      [userId, userId, userId]
+       ORDER BY last_time DESC`
     );
     
-    res.json(rows);
+    console.log(`✅ Found ${rows?.length || 0} conversations`);
+
+    res.json(rows || []);
+
   } catch (err) {
-    console.error("❌ GET /conversations error:", err);
+    console.error("❌ GET /conversations error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -47,10 +83,10 @@ router.get("/messages/:conversationId", verifyToken, async (req, res) => {
 
     console.log("📥 GET /messages/:conversationId called:", {
       userId,
-      conversationId,
+      conversationId
     });
 
-    // ✅ 1. CHECK: conversation موجودة؟
+    // ✅ CHECK: conversation موجودة؟
     const [convResult] = await db.query(
       "SELECT * FROM messenger_conversations WHERE id = ?",
       [conversationId]
@@ -63,17 +99,17 @@ router.get("/messages/:conversationId", verifyToken, async (req, res) => {
 
     const conversation = convResult[0];
 
-    // ✅ 2. CHECK: user عندو access؟
+    // ✅ CHECK: user عندو access؟
     const hasAccess = 
       Number(conversation.user_a_id) === Number(userId) ||
       Number(conversation.user_b_id) === Number(userId);
 
     if (!hasAccess) {
-      console.warn("⛔ Access denied for user:", userId);
+      console.warn("⛔ Access denied");
       return res.status(403).json({ message: "Access denied" });
     }
 
-    // ✅ 3. GET messages
+    // ✅ GET messages
     const [messages] = await db.query(
       `SELECT id, conversation_id, sender_id, type, text, created_at
        FROM messenger_messages
@@ -82,21 +118,13 @@ router.get("/messages/:conversationId", verifyToken, async (req, res) => {
       [conversationId]
     );
 
-    console.log(`✅ Found ${messages.length} messages`);
+    console.log(`✅ Found ${messages?.length || 0} messages`);
 
     res.json(messages || []);
+
   } catch (err) {
-    console.error("❌ GET /messages/:conversationId error:", {
-      message: err.message,
-      code: err.code,
-      sqlMessage: err.sqlMessage,
-      stack: err.stack
-    });
-    
-    res.status(500).json({ 
-      error: err.message,
-      code: err.code
-    });
+    console.error("❌ GET /messages/:conversationId error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -111,12 +139,10 @@ router.post("/messages", verifyToken, async (req, res) => {
     console.log("📤 POST /messages called:", { senderId, conversationId });
 
     // ✅ Validation
-    if (!conversationId) {
-      return res.status(400).json({ message: "conversationId required" });
-    }
-
-    if (!text || !text.trim()) {
-      return res.status(400).json({ message: "text required" });
+    if (!conversationId || !text?.trim()) {
+      return res.status(400).json({ 
+        message: "conversationId and text required" 
+      });
     }
 
     // ✅ CHECK: conversation موجودة؟
@@ -158,12 +184,10 @@ router.post("/messages", verifyToken, async (req, res) => {
     console.log("✅ Message created:", result.insertId);
 
     res.status(201).json(messages[0]);
+
   } catch (err) {
     console.error("❌ POST /messages error:", err);
-    res.status(500).json({ 
-      error: err.message,
-      code: err.code 
-    });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -176,7 +200,11 @@ router.post("/conversation", verifyToken, async (req, res) => {
     const userRole = req.user.role;
     const { targetId } = req.body;
 
-    console.log("🆕 POST /conversation called:", { userId, userRole, targetId });
+    console.log("🆕 POST /conversation called:", { 
+      userId, 
+      userRole, 
+      targetId 
+    });
 
     // ✅ Validation
     if (!targetId) {
@@ -233,6 +261,7 @@ router.post("/conversation", verifyToken, async (req, res) => {
     console.log("✅ Conversation created:", result.insertId);
 
     res.status(201).json(conv[0]);
+
   } catch (err) {
     // ✅ Handle duplicate
     if (err.code === "ER_DUP_ENTRY") {
@@ -249,29 +278,11 @@ router.post("/conversation", verifyToken, async (req, res) => {
           return res.json(existing[0]);
         }
       } catch (e) {
-        console.error("Duplicate recovery failed:", e);
+        console.error("❌ Duplicate recovery failed:", e);
       }
     }
 
     console.error("❌ POST /conversation error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════
-// 👨‍💼 GET /admins - قائمة الـ admins
-// ═══════════════════════════════════════════════════════════════
-router.get("/admins", verifyToken, async (req, res) => {
-  try {
-    const [admins] = await db.query(
-      "SELECT id_user, nom_user, prenom_user, email FROM utilisateurs WHERE role = 'admin'"
-    );
-
-    console.log(`✅ Found ${admins.length} admins`);
-
-    res.json(admins || []);
-  } catch (err) {
-    console.error("❌ GET /admins error:", err);
     res.status(500).json({ error: err.message });
   }
 });
