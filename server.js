@@ -26,7 +26,7 @@ const messengerRoutes = require("./routes/messengerRoutes");
 // ===============================
 // ✅ CONFIG
 // ===============================
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT
 const LIVE_SECRET = process.env.LIVE_SECRET || process.env.JWT_SECRET;
 
 const app = express();
@@ -205,6 +205,6 @@ db.query(`
 // ===============================
 seedAdmin();
 
-server.listen(PORT, () => {
-  console.log(`✅ Serveur lancé sur http://localhost:${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Serveur lancé sur port ${PORT}`);
 });
