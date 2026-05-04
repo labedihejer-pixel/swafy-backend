@@ -3,11 +3,16 @@ const router = express.Router();
 
 const PublicationController = require("../controllers/PublicationController");
 const { verifyToken } = require("../middleware/authMiddleware");
-const { adminOnly } = require("../middleware/adminMiddleware");
+//const { adminOnly } = require("../middleware/adminMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 
 /* PUBLICATIONS */
-router.post("/", verifyToken, adminOnly, upload.array("files", 10), PublicationController.createPublication);
+router.post(
+  "/",
+  verifyToken,
+  upload.array("files", 10),
+  PublicationController.createPublication
+);
 router.get("/public", PublicationController.getAllPublications);
 
 /* COMMENTS */

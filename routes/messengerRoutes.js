@@ -121,12 +121,11 @@ router.post("/messages", verifyToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 // GET كل الـ admins (للـ jeune باش يبعث)
 router.get("/admins", verifyToken, async (req, res) => {
   try {
     const [rows] = await db.query(
-      "SELECT id_user, nom_user, prenom_user, photo_user FROM utilisateurs WHERE role = 'admin'"
+      "SELECT id_user, nom_user, prenom_user FROM utilisateurs WHERE role = 'admin'"
     );
     res.json(rows);
   } catch (err) {
