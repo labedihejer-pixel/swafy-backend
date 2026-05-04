@@ -375,42 +375,127 @@ router.delete("/:id", verifyToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 // ===============================
-// 💬 POST /publications/:id/comments - Add comment
+// 📝 POST /publications - Create publication
 // ===============================
-router.post("/:id/comments", verifyToken, async (req, res) => {
+router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
   try {
     const userId = req.user.id_user;
-    const { id } = req.params;
-    const { contenu_commentaire, type_commentaire = "texte", debat_side } = req.body;
+    const { titre_publication, contenu_publication, type_publication = "texte" } = req.body;
 
-    console.log("💬 POST /comments called:", { userId, id, type: type_commentaire });
+    console.log("📝 POST /publications called:", {
+      userId,
+      titre: titre_publication?.substring(0, 30),
+      type: type_publication,
+      files: req.files?.length || 0,
+    });
 
-    if (!contenu_commentaire || !contenu_commentaire.trim()) {
-      return res.status(400).json({ message: "Comment content required" });
+    // ✅ Validation
+    if (!titre_publication || !titre_publication.trim()) {
+      console.warn("⚠️ Title missing");
+      return res.status(400).json({ message: "Title is required" });
     }
 
-    // ✅ Insert comment
+    // ✅ Map type
+    const typeMap = {
+      text: "texte",
+      image: "photo",
+      video: "video",
+      pdf: "pdf",
+      texte: "texte",
+      photo: "photo",
+      debat: "debat",
+    };
+
+    const finalType = typeMap[type_publication] || "texte";
+
+    // ✅ Insert publication
     const [result] = await db.query(
-      `INSERT INTO publication_commentaires 
-       (id_publication, id_user, contenu, debat_side, created_at)
-       VALUES (?, ?, ?, ?, NOW())`,
-      [id, userId, contenu_commentaire.trim(), debat_side || null]
+      `INSERT INTO publications 
+       (user_id, titre_publication, contenu_publication, type_publication, date_publication, status_publication)
+       VALUES (?, ?, ?, ?, NOW(), 'publie')`,
+      [
+        userId,
+        titre_publication.trim(),
+        contenu_publication?.trim() || "",
+        finalType,
+      ]
     );
 
-    console.log("✅ Comment added:", result.insertId);
+    const publicationId = result.insertId;
+    console.log("✅ Publication created:", publicationId);
+
+    // ✅ Handle file uploads
+    if (req.files && req.files.length > 0) {
+      console.log(`📎 Processing ${req.files.length} files...`);
+
+      for (const file of req.files) {
+        try {
+          const mimeType = file.mimetype;
+          let mediaType = "photo";
+
+          if (mimeType.startsWith("image/")) mediaType = "photo";
+          else if (mimeType.startsWith("video/")) mediaType = "video";
+          else if (mimeType === "application/pdf") mediaType = "pdf";
+
+          const urlMedia = `/uploads/publications/${file.filename}`;
+
+          await db.query(
+            `INSERT INTO publication_medias 
+             (id_publication, type_media, url_media, nom_original, taille_fichier, created_at)
+             VALUES (?, ?, ?, ?, ?, NOW())`,
+            [publicationId, mediaType, urlMedia, file.originalname, file.size]
+          );
+
+          console.log(`✅ Media added: ${urlMedia} (${mediaType})`);
+        } catch (fileErr) {
+          console.error(`❌ Error adding media file:`, fileErr);
+        }
+      }
+    }
+
+    // ✅ Get created publication with media
+    const [publication] = await db.query(
+      `SELECT 
+        id_publication,
+        user_id,
+        titre_publication,
+        contenu_publication,
+        type_publication,
+        date_publication
+      FROM publications
+      WHERE id_publication = ?`,
+      [publicationId]
+    );
+
+    const [medias] = await db.query(
+      `SELECT id_media, type_media, url_media, nom_original
+       FROM publication_medias
+       WHERE id_publication = ?`,
+      [publicationId]
+    );
+
+    console.log("✅ Returning created publication");
 
     res.status(201).json({
-      id_commentaire: result.insertId,
-      message: "Comment added",
+      ...publication[0],
+      medias: medias || [],
     });
   } catch (err) {
-    console.error("❌ POST /comments error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("❌ POST /publications error:", {
+      message: err.message,
+      code: err.code,
+      sqlMessage: err.sqlMessage,
+      stack: err.stack,
+    });
+
+    res.status(500).json({
+      error: "Failed to create publication",
+      message: err.message,
+      code: err.code,
+    });
   }
 });
-
 // ===============================
 // 📝 GET /publications/:id/comments - Get comments
 // ===============================
