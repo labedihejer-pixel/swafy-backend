@@ -26,8 +26,9 @@ const messengerRoutes = require("./routes/messengerRoutes");
 // ===============================
 // ✅ CONFIG
 // ===============================
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5000;
 const LIVE_SECRET = process.env.LIVE_SECRET || process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
 const app = express();
 const server = http.createServer(app);
@@ -66,7 +67,7 @@ app.get("/", (req, res) => {
 });
 
 // ===============================
-// ✅ SOCKET.IO
+// ✅ SOCKET.IO SETUP
 // ===============================
 const io = new Server(server, {
   cors: {
@@ -75,9 +76,117 @@ const io = new Server(server, {
   },
 });
 
+// ✅ Store connected users (userId → socketId)
+const connectedUsers = new Map();
 const roomUsers = {};
 const socketRoomMap = {};
 
+// ===============================
+// ✅ SOCKET.IO - MESSAGING NAMESPACE
+// ===============================
+const messageNamespace = io.of("/messaging");
+
+messageNamespace.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  
+  if (!token) {
+    console.log("❌ Socket auth: No token provided");
+    return next(new Error("No token provided"));
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    socket.user = decoded;
+    console.log("✅ Socket auth success for user:", decoded.id_user);
+    next();
+  } catch (err) {
+    console.log("❌ Socket auth: Invalid token");
+    next(new Error("Invalid token"));
+  }
+});
+
+messageNamespace.on("connection", (socket) => {
+  const userId = socket.user.id_user;
+  
+  // ✅ Store user connection
+  connectedUsers.set(userId, socket.id);
+  
+  console.log(`✅ [Messaging] User ${userId} connected. Socket: ${socket.id}`);
+  console.log(`📊 [Messaging] Active users: ${connectedUsers.size}`);
+
+  // ✅ Event: New message
+  socket.on("new_message", (data) => {
+    const { conversationId, recipientId, text, senderName } = data;
+
+    console.log(`📨 [Messaging] New message from ${userId} to ${recipientId}:`, text?.substring(0, 50));
+
+    // ✅ Send notification to recipient if online
+    if (connectedUsers.has(recipientId)) {
+      const recipientSocketId = connectedUsers.get(recipientId);
+      
+      messageNamespace.to(recipientSocketId).emit("message_received", {
+        conversationId,
+        senderId: userId,
+        senderName,
+        text,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`🔔 [Messaging] Notification sent to user ${recipientId}`);
+    } else {
+      console.log(`⚠️ [Messaging] User ${recipientId} not online`);
+    }
+  });
+
+  // ✅ Event: Typing indicator
+  socket.on("typing", (data) => {
+    const { conversationId, recipientId } = data;
+    
+    if (connectedUsers.has(recipientId)) {
+      const recipientSocketId = connectedUsers.get(recipientId);
+      messageNamespace.to(recipientSocketId).emit("user_typing", {
+        conversationId,
+        senderId: userId
+      });
+    }
+  });
+
+  // ✅ Event: Stop typing
+  socket.on("stop_typing", (data) => {
+    const { conversationId, recipientId } = data;
+    
+    if (connectedUsers.has(recipientId)) {
+      const recipientSocketId = connectedUsers.get(recipientId);
+      messageNamespace.to(recipientSocketId).emit("user_stop_typing", {
+        conversationId,
+        senderId: userId
+      });
+    }
+  });
+
+  // ✅ Event: Mark as read
+  socket.on("mark_read", (data) => {
+    const { conversationId, recipientId } = data;
+    
+    if (connectedUsers.has(recipientId)) {
+      const recipientSocketId = connectedUsers.get(recipientId);
+      messageNamespace.to(recipientSocketId).emit("messages_read", {
+        conversationId,
+        readBy: userId
+      });
+    }
+  });
+
+  // ✅ Disconnect
+  socket.on("disconnect", () => {
+    connectedUsers.delete(userId);
+    console.log(`❌ [Messaging] User ${userId} disconnected. Active: ${connectedUsers.size}`);
+  });
+});
+
+// ===============================
+// ✅ SOCKET.IO - LIVE NAMESPACE (Original)
+// ===============================
 async function validateLiveSocketAccess(roomCode, accessToken, role) {
   try {
     const decoded = jwt.verify(accessToken, LIVE_SECRET);
@@ -128,8 +237,9 @@ function leaveRoom(socket) {
   socket.leave(roomCode);
 }
 
+// ✅ Main namespace للـ Live
 io.on("connection", (socket) => {
-  console.log("✅ Socket connecté:", socket.id);
+  console.log("✅ [Live] Socket connecté:", socket.id);
 
   socket.on("join-room", async (payload, ack = () => {}) => {
     try {
@@ -139,7 +249,10 @@ io.on("connection", (socket) => {
         return;
       }
       const check = await validateLiveSocketAccess(roomCode, accessToken, role);
-      if (!check.ok) { ack({ ok: false, message: check.message }); return; }
+      if (!check.ok) {
+        ack({ ok: false, message: check.message });
+        return;
+      }
 
       socket.join(roomCode);
       socketRoomMap[socket.id] = roomCode;
@@ -173,9 +286,50 @@ io.on("connection", (socket) => {
   socket.on("leave-room", () => leaveRoom(socket));
   socket.on("disconnect", () => {
     leaveRoom(socket);
-    console.log("❌ Socket déconnecté:", socket.id);
+    console.log("❌ [Live] Socket déconnecté:", socket.id);
   });
 });
+
+// ===============================
+// ✅ MESSENGER TABLES
+// ===============================
+const createMessengerTables = async () => {
+  try {
+    // ✅ Conversations table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS messenger_conversations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_a_id INT NOT NULL,
+        user_b_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_conv (user_a_id, user_b_id),
+        INDEX idx_user_a (user_a_id),
+        INDEX idx_user_b (user_b_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log("✅ messenger_conversations table ready");
+
+    // ✅ Messages table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS messenger_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conversation_id INT NOT NULL,
+        sender_id INT NOT NULL,
+        type VARCHAR(20) DEFAULT 'text',
+        text LONGTEXT NOT NULL,
+        is_read TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_conversation (conversation_id),
+        INDEX idx_sender (sender_id),
+        INDEX idx_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log("✅ messenger_messages table ready");
+
+  } catch (err) {
+    console.error("❌ Messenger tables error:", err.message);
+  }
+};
 
 // ===============================
 // ✅ NOTIFICATIONS TABLE
@@ -203,8 +357,16 @@ db.query(`
 // ===============================
 // ✅ START SERVER
 // ===============================
-seedAdmin();
+const startServer = async () => {
+  await createMessengerTables();
+  await seedAdmin();
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Serveur lancé sur port ${PORT}`);
-});
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`✅ Serveur lancé sur port ${PORT}`);
+    console.log(`📡 Socket.io ready:`);
+    console.log(`   - Main namespace: /`);
+    console.log(`   - Messaging namespace: /messaging`);
+  });
+};
+
+startServer();
