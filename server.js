@@ -26,7 +26,7 @@ const messengerRoutes = require("./routes/messengerRoutes");
 // ===============================
 // ✅ CONFIG
 // ===============================
-const PORT = process.env.PORT
+const PORT = process.env.PORT;
 const LIVE_SECRET = process.env.LIVE_SECRET || process.env.JWT_SECRET;
 
 const app = express();
