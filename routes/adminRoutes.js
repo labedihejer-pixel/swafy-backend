@@ -6,7 +6,7 @@ const {
   approveUser,
   blockUser,
   deleteUser
-} = require("../controllers/AdminController");
+} = require("../controllers/adminController");
 
 const { verifyToken } = require("../middleware/authMiddleware");
 const { adminOnly } = require("../middleware/adminMiddleware");
