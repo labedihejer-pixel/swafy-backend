@@ -20,15 +20,15 @@ router.get("/lives", verifyToken, async (req, res) => {
     const adminId = req.user.id_user;
 
     const [rows] = await db.query(`
-      SELECT
-        l.id_live AS id,
-        l.titre_live AS title,
-        l.description_live AS description,
-        l.date_live AS date
-      FROM lives l
-      WHERE l.id_user = ?
-      ORDER BY l.date_live DESC
-    `, [adminId]);
+  SELECT
+    l.id AS id,
+    l.title AS title,
+    l.description AS description,
+    l.date AS date
+  FROM lives l
+  WHERE l.host_user_id = ?
+  ORDER BY l.date DESC
+`, [adminId]);
 
     res.json(rows);
   } catch (err) {
