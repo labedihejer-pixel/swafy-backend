@@ -22,7 +22,7 @@ const parametreRoutes = require("./routes/ParametreRoutes");
 const publicationRoutes = require("./routes/PublicationRoutes");
 const notificationRoutes = require("./routes/NotificationRoutes");
 const messengerRoutes = require("./routes/messengerRoutes");
-const adminRoutes = require("./routes/adminRoutes");
+//const adminRoutes = require("./routes/adminRoutes");
 
 // ===============================
 // ✅ CONFIG
@@ -61,7 +61,7 @@ app.use("/api/publications", publicationRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/messages", messengerRoutes);
 app.use("/uploads", express.static("uploads"));
-app.use("/api/admin", adminRoutes);
+// app.use("/api/admin", adminRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "🚀 Serveur lancé avec succès" });
