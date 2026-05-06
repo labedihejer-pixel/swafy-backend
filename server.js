@@ -9,6 +9,10 @@ const db = require("./config/db");
 // ===============================
 // ✅ ROUTES IMPORTS
 // ===============================
+const fs = require("fs");
+
+console.log("📁 ROUTES DIR:", fs.readdirSync("./routes"));
+console.log("📁 CONTROLLERS DIR:", fs.readdirSync("./controllers"));
 const { seedAdmin } = require("./controllers/authController");
 const authRoutes = require("./routes/authRoutes");
 const eventRoutes = require("./routes/EventRoutes");
@@ -61,7 +65,7 @@ app.use("/api/publications", publicationRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/messages", messengerRoutes);
 app.use("/uploads", express.static("uploads"));
-// app.use("/api/admin", adminRoutes);
+//app.use("/api/admin", adminRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "🚀 Serveur lancé avec succès" });

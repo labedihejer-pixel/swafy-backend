@@ -1,3 +1,4 @@
+// routes/PublicationRoutes.js
 const express = require("express");
 const router = express.Router();
 const db = require("../config/db");
@@ -6,16 +7,16 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
+// ===============================
 // ✅ Setup multer
+// ===============================
 const uploadsDir = path.join(__dirname, "../uploads/publications");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
+  destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
@@ -30,67 +31,73 @@ const upload = multer({
       "image/jpeg",
       "image/png",
       "image/gif",
+      "image/webp",
       "application/pdf",
       "video/mp4",
       "video/quicktime",
-      "text/plain",
     ];
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Invalid file type"));
-    }
+    if (allowedMimes.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Invalid file type"));
   },
 });
 
 // ===============================
-// 📋 GET /publications/public - List public publications
+// Helpers
+// ===============================
+const normalizeType = (t) => {
+  const typeMap = {
+    text: "texte",
+    image: "photo",
+    video: "video",
+    pdf: "pdf",
+    texte: "texte",
+    photo: "photo",
+    debat: "debat",
+  };
+  return typeMap[t] || "texte";
+};
+
+const buildReactionsObject = (rows) => {
+  const reactions = { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 };
+  for (const r of rows || []) {
+    reactions[r.type_reaction] = Number(r.cnt) || 0;
+  }
+  return reactions;
+};
+
+const safeDiskPathFromUrlMedia = (url_media) => {
+  // url_media example: "/uploads/publications/xxx.png"
+  const rel = String(url_media || "").replace(/^\/+/, ""); // remove leading "/"
+  return path.join(__dirname, "..", rel);
+};
+
+// ===============================
+// 📋 GET /publications/public
 // ===============================
 router.get("/public", async (req, res) => {
   try {
-    console.log("📋 GET /publications/public called");
-
-    const [publications] = await db.query(
-      `SELECT 
+    const [publications] = await db.query(`
+      SELECT
         p.id_publication,
         p.user_id,
         p.titre_publication,
-        p.contenu_publication,
+        p.contenu,
         p.type_publication,
-        p.date_publication,
+        p.created_at,
+        p.updated_at,
         p.status_publication,
         u.nom_user,
         u.prenom_user,
-        (SELECT COUNT(*) FROM publication_medias pm WHERE pm.id_publication = p.id_publication) as media_count,
-        (SELECT COUNT(*) FROM publication_commentaires pc WHERE pc.id_publication = p.id_publication AND pc.statut_commentaire = 'visible') as comments_count,
-        (SELECT COUNT(*) FROM commentaire_reactions cr WHERE cr.id_publication = p.id_publication) as reactions_count
+        (SELECT COUNT(*) FROM publication_commentaires pc WHERE pc.id_publication = p.id_publication) AS comments_count,
+        (SELECT COUNT(*) FROM publication_reactions pr WHERE pr.id_publication = p.id_publication) AS reactions_count
       FROM publications p
       LEFT JOIN utilisateurs u ON p.user_id = u.id_user
-      WHERE p.status_publication = 'publie'
-      ORDER BY p.date_publication DESC
-      LIMIT 50`
-    );
+      WHERE p.status_publication != 'public'
+      ORDER BY p.updated_at DESC
 
-    console.log(`✅ Found ${publications?.length || 0} public publications`);
+    `);
 
-    // ✅ Get media for each publication
-    const publicationsWithMedia = await Promise.all(
-      (publications || []).map(async (pub) => {
-        const [medias] = await db.query(
-          `SELECT id_media, type_media, url_media, nom_original
-           FROM publication_medias
-           WHERE id_publication = ?`,
-          [pub.id_publication]
-        );
-
-        return {
-          ...pub,
-          medias: medias || [],
-        };
-      })
-    );
-
-    res.json(publicationsWithMedia);
+    res.json(publications || []);
   } catch (err) {
     console.error("❌ GET /publications/public error:", err);
     res.status(500).json({ error: err.message });
@@ -98,36 +105,31 @@ router.get("/public", async (req, res) => {
 });
 
 // ===============================
-// 📋 GET /publications - All publications (auth required)
+// 📋 GET /publications (auth)
 // ===============================
 router.get("/", verifyToken, async (req, res) => {
   try {
-    console.log("📋 GET /publications called");
-
     const [publications] = await db.query(
       `SELECT 
         p.id_publication,
         p.user_id,
         p.titre_publication,
-        p.contenu_publication,
+        p.contenu,
         p.type_publication,
-        p.date_publication,
+        p.created_at,
+        p.updated_at,
         p.status_publication,
         u.nom_user,
         u.prenom_user,
-        (SELECT COUNT(*) FROM publication_medias WHERE id_publication = p.id_publication) as media_count,
-        (SELECT COUNT(*) FROM publication_commentaires WHERE id_publication = p.id_publication AND statut_commentaire = 'visible') as comments_count
+        (SELECT COUNT(*) FROM publication_commentaires pc WHERE pc.id_publication = p.id_publication) AS comments_count,
+        (SELECT COUNT(*) FROM publication_reactions pr WHERE pr.id_publication = p.id_publication) AS reactions_count
       FROM publications p
       LEFT JOIN utilisateurs u ON p.user_id = u.id_user
       WHERE p.status_publication != 'supprime'
-      ORDER BY p.date_publication DESC
-      LIMIT 100`
+      ORDER BY p.updated_at DESC `
     );
 
-    console.log(`✅ Found ${publications?.length || 0} publications`);
-
-    // ✅ Get media for each publication
-    const publicationsWithMedia = await Promise.all(
+    const withData = await Promise.all(
       (publications || []).map(async (pub) => {
         const [medias] = await db.query(
           `SELECT id_media, type_media, url_media, nom_original
@@ -136,110 +138,116 @@ router.get("/", verifyToken, async (req, res) => {
           [pub.id_publication]
         );
 
+        const [reacRows] = await db.query(
+          `SELECT type_reaction, COUNT(*) cnt
+           FROM publication_reactions
+           WHERE id_publication = ?
+           GROUP BY type_reaction`,
+          [pub.id_publication]
+        );
+
         return {
           ...pub,
           medias: medias || [],
+          reactions: buildReactionsObject(reacRows),
         };
       })
     );
 
-    res.json(publicationsWithMedia);
+    res.json(withData);
   } catch (err) {
-    console.error("❌ GET /publications error:", err);
+    console.error("❌ GET /publications error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // ===============================
-// 📝 POST /publications - Create publication
+// 📝 POST /publications (create)
+// supports multipart (files[]) + also supports body "contenu" coming from frontend
 // ===============================
 router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
   try {
     const userId = req.user.id_user;
-    const { titre_publication, contenu_publication, type_publication = "texte" } = req.body;
 
-    console.log("📝 POST /publications called:", {
-      userId,
-      titre: titre_publication?.substring(0, 30),
-      type: type_publication,
-      files: req.files?.length || 0,
-    });
+    const {
+      titre_publication,
+      contenu_publication,
+      contenu, // ✅ frontend sometimes sends "contenu"
+      type_publication = "texte",
+      question_debat,
+    } = req.body;
 
-    // ✅ Validation
-    if (!titre_publication || !titre_publication.trim()) {
-      console.warn("⚠️ Title missing");
-      return res.status(400).json({ message: "Title is required" });
+    const finalType = normalizeType(type_publication);
+
+    let finalTitle = (titre_publication || "").trim();
+    let finalContent = (contenu_publication ?? contenu ?? "").trim();
+
+    // debat: question_debat as title (if provided)
+    if (finalType === "debat" && question_debat?.trim()) {
+      finalTitle = question_debat.trim();
     }
 
-    // ✅ Map type
-    const typeMap = {
-      text: "texte",
-      image: "photo",
-      video: "video",
-      pdf: "pdf",
-      texte: "texte",
-      photo: "photo",
-      debat: "debat",
-    };
+    const hasFiles = req.files && req.files.length > 0;
+    if (!finalTitle && !finalContent && !hasFiles) {
+      return res
+        .status(400)
+        .json({ error: "Write something or upload a file" });
+    }
 
-    const finalType = typeMap[type_publication] || "texte";
+    // ✅ check user exists
+    const [userExists] = await db.query(
+      "SELECT id_user FROM utilisateurs WHERE id_user = ?",
+      [userId]
+    );
+    if (!userExists || userExists.length === 0) {
+      return res.status(401).json({ error: "User not found - please re-login" });
+    }
 
-    // ✅ Insert publication
+    // Insert publication
     const [result] = await db.query(
-      `INSERT INTO publications 
-       (user_id, titre_publication, contenu_publication, type_publication, date_publication, status_publication)
-       VALUES (?, ?, ?, ?, NOW(), 'publie')`,
-      [
-        userId,
-        titre_publication.trim(),
-        contenu_publication?.trim() || "",
-        finalType,
-      ]
+      `INSERT INTO publications
+      (user_id, titre_publication, contenu, type_publication, created_at, status_publication)
+      VALUES (?, ?, ?, ?, NOW(), 'public')`,
+      [userId, finalTitle || null, finalContent || "", finalType]
     );
 
     const publicationId = result.insertId;
-    console.log("✅ Publication created:", publicationId);
 
-    // ✅ Handle file uploads
-    if (req.files && req.files.length > 0) {
-      console.log(`📎 Processing ${req.files.length} files...`);
-
+    // Insert medias
+    if (hasFiles) {
       for (const file of req.files) {
-        try {
-          const mimeType = file.mimetype;
-          let mediaType = "photo";
+        let mediaType = "photo";
+        if (file.mimetype.startsWith("image/")) mediaType = "photo";
+        else if (file.mimetype.startsWith("video/")) mediaType = "video";
+        else if (file.mimetype === "application/pdf") mediaType = "pdf";
 
-          if (mimeType.startsWith("image/")) mediaType = "photo";
-          else if (mimeType.startsWith("video/")) mediaType = "video";
-          else if (mimeType === "application/pdf") mediaType = "pdf";
+        const urlMedia = `/uploads/publications/${file.filename}`;
 
-          const urlMedia = `/uploads/publications/${file.filename}`;
-
-          await db.query(
-            `INSERT INTO publication_medias 
-             (id_publication, type_media, url_media, nom_original, taille_fichier, created_at)
-             VALUES (?, ?, ?, ?, ?, NOW())`,
-            [publicationId, mediaType, urlMedia, file.originalname, file.size]
-          );
-
-          console.log(`✅ Media added: ${urlMedia} (${mediaType})`);
-        } catch (fileErr) {
-          console.error(`❌ Error adding media file:`, fileErr);
-        }
+        await db.query(
+          `INSERT INTO publication_medias 
+           (id_publication, type_media, url_media, nom_original, taille_fichier, created_at)
+           VALUES (?, ?, ?, ?, ?, NOW())`,
+          [publicationId, mediaType, urlMedia, file.originalname, file.size]
+        );
       }
     }
 
-    // ✅ Get created publication with media
-    const [publication] = await db.query(
+    // Return created publication
+    const [[pub]] = await db.query(
       `SELECT 
-        id_publication,
-        user_id,
-        titre_publication,
-        contenu_publication,
-        type_publication,
-        date_publication
-      FROM publications
-      WHERE id_publication = ?`,
+        p.id_publication,
+        p.user_id,
+        p.titre_publication,
+        p.contenu,
+        p.type_publication,
+        
+          p.created_at,
+          p.updated_at,
+        u.nom_user,
+        u.prenom_user
+      FROM publications p
+      LEFT JOIN utilisateurs u ON p.user_id = u.id_user
+      WHERE p.id_publication = ?`,
       [publicationId]
     );
 
@@ -250,150 +258,21 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
       [publicationId]
     );
 
-    console.log("✅ Publication created successfully");
-
     res.status(201).json({
-      ...publication[0],
+      ...pub,
       medias: medias || [],
+      comments_count: 0,
+      reactions_count: 0,
+      reactions: { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 },
     });
   } catch (err) {
-    console.error("❌ POST /publications error:", {
-      message: err.message,
-      code: err.code,
-      sqlMessage: err.sqlMessage,
-    });
-
-    res.status(500).json({
-      error: "Failed to create publication",
-      message: err.message,
-    });
-  }
-});
-
-// ===============================
-// ✏️ PUT /publications/:id - Update publication
-// ===============================
-router.put("/:id", verifyToken, upload.array("files", 10), async (req, res) => {
-  try {
-    const userId = req.user.id_user;
-    const { id } = req.params;
-    const { titre_publication, contenu_publication, type_publication } = req.body;
-
-    console.log("✏️ PUT /publications/:id called:", { userId, id });
-
-    // ✅ Get existing publication
-    const [existing] = await db.query(
-      "SELECT * FROM publications WHERE id_publication = ?",
-      [id]
-    );
-
-    if (!existing || existing.length === 0) {
-      return res.status(404).json({ message: "Publication not found" });
-    }
-
-    // ✅ Check ownership
-    if (Number(existing[0].user_id) !== Number(userId)) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    // ✅ Update publication
-    await db.query(
-      `UPDATE publications 
-       SET titre_publication = ?, contenu_publication = ?, type_publication = ?, updated_at = NOW()
-       WHERE id_publication = ?`,
-      [
-        titre_publication?.trim() || existing[0].titre_publication,
-        contenu_publication?.trim() || existing[0].contenu_publication,
-        type_publication || existing[0].type_publication,
-        id,
-      ]
-    );
-
-    // ✅ Handle new files
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        const mimeType = file.mimetype;
-        let mediaType = "photo";
-
-        if (mimeType.startsWith("image/")) mediaType = "photo";
-        else if (mimeType.startsWith("video/")) mediaType = "video";
-        else if (mimeType === "application/pdf") mediaType = "pdf";
-
-        const urlMedia = `/uploads/publications/${file.filename}`;
-
-        await db.query(
-          `INSERT INTO publication_medias 
-           (id_publication, type_media, url_media, nom_original, taille_fichier, created_at)
-           VALUES (?, ?, ?, ?, ?, NOW())`,
-          [id, mediaType, urlMedia, file.originalname, file.size]
-        );
-      }
-    }
-
-    console.log("✅ Publication updated:", id);
-
-    res.json({ message: "Publication updated successfully" });
-  } catch (err) {
-    console.error("❌ PUT /publications/:id error:", err);
+    console.error("❌ POST /publications error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // ===============================
-// 🗑️ DELETE /publications/:id - Delete publication
-// ===============================
-router.delete("/:id", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id_user;
-    const { id } = req.params;
-
-    console.log("🗑️ DELETE /publications/:id called:", { userId, id });
-
-    // ✅ Get publication
-    const [publication] = await db.query(
-      "SELECT * FROM publications WHERE id_publication = ?",
-      [id]
-    );
-
-    if (!publication || publication.length === 0) {
-      return res.status(404).json({ message: "Publication not found" });
-    }
-
-    // ✅ Check ownership
-    if (Number(publication[0].user_id) !== Number(userId)) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    // ✅ Delete media files
-    const [medias] = await db.query(
-      "SELECT url_media FROM publication_medias WHERE id_publication = ?",
-      [id]
-    );
-
-    for (const media of medias || []) {
-      const filePath = path.join(__dirname, "..", media.url_media);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
-
-    // ✅ Update status to supprime
-    await db.query(
-      "UPDATE publications SET status_publication = 'supprime', updated_at = NOW() WHERE id_publication = ?",
-      [id]
-    );
-
-    console.log("✅ Publication deleted:", id);
-
-    res.json({ message: "Publication deleted successfully" });
-  } catch (err) {
-    console.error("❌ DELETE /publications/:id error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ===============================
-// 💬 POST /publications/:id/comments - Add comment
+// 💬 POST /publications/:id/comments
 // ===============================
 router.post("/:id/comments", verifyToken, async (req, res) => {
   try {
@@ -401,24 +280,18 @@ router.post("/:id/comments", verifyToken, async (req, res) => {
     const { id } = req.params;
     const { contenu_commentaire, type_commentaire = "texte" } = req.body;
 
-    console.log("💬 POST /comments called:", { userId, id, type: type_commentaire });
-
-    if (!contenu_commentaire || !contenu_commentaire.trim()) {
-      return res.status(400).json({ message: "Comment content required" });
+    if (!contenu_commentaire?.trim()) {
+      return res.status(400).json({ error: "Comment required" });
     }
 
-    // ✅ Insert comment
     const [result] = await db.query(
-      `INSERT INTO publication_commentaires 
-       (id_publication, id_user, contenu, type_commentaire, created_at)
-       VALUES (?, ?, ?, ?, NOW())`,
+      `INSERT INTO publication_commentaires
+       (id_publication, id_user, contenu, type_commentaire, statut_commentaire, created_at)
+       VALUES (?, ?, ?, ?, 'visible', NOW())`,
       [id, userId, contenu_commentaire.trim(), type_commentaire]
     );
 
-    console.log("✅ Comment added:", result.insertId);
-
-    // ✅ Get the created comment with user info
-    const [comment] = await db.query(
+    const [[comment]] = await db.query(
       `SELECT 
         pc.id_commentaire,
         pc.id_publication,
@@ -428,27 +301,25 @@ router.post("/:id/comments", verifyToken, async (req, res) => {
         pc.created_at,
         u.nom_user,
         u.prenom_user
-      FROM publication_commentaires pc
-      LEFT JOIN utilisateurs u ON pc.id_user = u.id_user
-      WHERE pc.id_commentaire = ?`,
+       FROM publication_commentaires pc
+       LEFT JOIN utilisateurs u ON pc.id_user = u.id_user
+       WHERE pc.id_commentaire = ?`,
       [result.insertId]
     );
 
-    res.status(201).json(comment[0]);
+    res.status(201).json(comment);
   } catch (err) {
-    console.error("❌ POST /comments error:", err);
+    console.error("❌ POST /:id/comments error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // ===============================
-// 📝 GET /publications/:id/comments - Get all comments
+// 📝 GET /publications/:id/comments
 // ===============================
 router.get("/:id/comments", async (req, res) => {
   try {
     const { id } = req.params;
-
-    console.log("📝 GET /:id/comments called:", { id });
 
     const [comments] = await db.query(
       `SELECT 
@@ -459,67 +330,255 @@ router.get("/:id/comments", async (req, res) => {
         pc.type_commentaire,
         pc.created_at,
         u.nom_user,
-        u.prenom_user,
-        (SELECT COUNT(*) FROM commentaire_reactions cr WHERE cr.id_commentaire = pc.id_commentaire) as reactions_count
-      FROM publication_commentaires pc
-      LEFT JOIN utilisateurs u ON pc.id_user = u.id_user
-      WHERE pc.id_publication = ? AND pc.statut_commentaire = 'visible'
-      ORDER BY pc.created_at DESC`,
+        u.prenom_user
+       FROM publication_commentaires pc
+       LEFT JOIN utilisateurs u ON pc.id_user = u.id_user
+       WHERE pc.id_publication = ?
+       ORDER BY pc.created_at DESC`,
       [id]
     );
 
-    console.log(`✅ Found ${comments?.length || 0} comments`);
-
     res.json(comments || []);
   } catch (err) {
-    console.error("❌ GET /comments error:", err);
+    console.error("❌ GET /:id/comments error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+router.post("/:id/reactions", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id_user;
+    const pubId = req.params.id;
+    const { type_reaction } = req.body;
+
+    const allowed = ["like", "love", "haha", "wow", "sad", "angry"];
+    if (!allowed.includes(type_reaction)) {
+      return res.status(400).json({ error: "Invalid reaction type" });
+    }
+
+    const [existing] = await db.query(
+      `SELECT type_reaction 
+       FROM publication_reactions
+       WHERE id_publication = ? AND id_user = ?`,
+      [pubId, userId]
+    );
+
+    let reacted = true;
+
+    if (existing.length > 0 && existing[0].type_reaction === type_reaction) {
+      // toggle off
+      await db.query(
+        `DELETE FROM publication_reactions
+         WHERE id_publication = ? AND id_user = ?`,
+        [pubId, userId]
+      );
+      reacted = false;
+    } else {
+      // upsert
+      await db.query(
+        `INSERT INTO publication_reactions (id_publication, id_user, type_reaction, created_at)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE type_reaction = VALUES(type_reaction)`,
+        [pubId, userId, type_reaction]
+      );
+    }
+
+    const [[cntRow]] = await db.query(
+      `SELECT COUNT(*) cnt FROM publication_reactions WHERE id_publication = ?`,
+      [pubId]
+    );
+
+    const [breakdownRows] = await db.query(
+      `SELECT type_reaction, COUNT(*) cnt
+       FROM publication_reactions
+       WHERE id_publication = ?
+       GROUP BY type_reaction`,
+      [pubId]
+    );
+
+    res.json({
+      reacted,
+      reactions_count: Number(cntRow.cnt) || 0,
+      reactions: buildReactionsObject(breakdownRows),
+    });
+  } catch (err) {
+    console.error("❌ POST /:id/reactions error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // ===============================
-// 👍 POST /publications/:id/reactions - Add reaction
+// 📄 GET /publications/:id (detail)
 // ===============================
-router.post("/:id/reactions", verifyToken, async (req, res) => {
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [[pub]] = await db.query(
+      `SELECT 
+        p.id_publication,
+        p.user_id,
+        p.titre_publication,
+        p.contenu,
+        p.type_publication,
+       
+        p.status_publication,
+        u.nom_user,
+        u.prenom_user,
+        (SELECT COUNT(*) FROM publication_commentaires pc WHERE pc.id_publication = p.id_publication) AS comments_count,
+        (SELECT COUNT(*) FROM publication_reactions pr WHERE pr.id_publication = p.id_publication) AS reactions_count
+      FROM publications p
+      LEFT JOIN utilisateurs u ON p.user_id = u.id_user
+      WHERE p.id_publication = ? AND p.status_publication != 'supprime'`,
+      [id]
+    );
+
+    if (!pub) return res.status(404).json({ error: "Publication introuvable" });
+    const [medias] = await db.query(
+      `SELECT id_media, type_media, url_media, nom_original
+       FROM publication_medias
+       WHERE id_publication = ?`,
+      [id]
+    );
+
+    const [reacRows] = await db.query(
+      `SELECT type_reaction, COUNT(*) cnt
+       FROM publication_reactions
+       WHERE id_publication = ?
+       GROUP BY type_reaction`,
+      [id]
+    );
+
+    res.json({
+      ...pub,
+      medias: medias || [],
+      reactions: buildReactionsObject(reacRows),
+    });
+  } catch (err) {
+    console.error("❌ GET /:id error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===============================
+//  PUT /publications/:id
+// ===============================
+router.put("/:id", verifyToken, upload.array("files", 10), async (req, res) => {
   try {
     const userId = req.user.id_user;
     const { id } = req.params;
-    const { reaction_type = "like" } = req.body;
 
-    console.log("👍 POST /reactions called:", { userId, id, reaction: reaction_type });
+    const {
+      titre_publication,
+      contenu_publication,
+      contenu,
+      type_publication,
+      question_debat,
+    } = req.body;
 
-    // ✅ Check if already reacted
-    const [existing] = await db.query(
-      `SELECT * FROM commentaire_reactions 
-       WHERE id_publication = ? AND user_id = ?`,
-      [id, userId]
+    const [existingRows] = await db.query(
+      "SELECT * FROM publications WHERE id_publication = ?",
+      [id]
     );
-
-    if (existing && existing.length > 0) {
-      // ✅ Remove reaction
-      await db.query(
-        `DELETE FROM commentaire_reactions 
-         WHERE id_publication = ? AND user_id = ?`,
-        [id, userId]
-      );
-
-      console.log("✅ Reaction removed");
-      return res.json({ message: "Reaction removed", reacted: false });
+    if (!existingRows || existingRows.length === 0) {
+      return res.status(404).json({ error: "Not found" });
     }
 
-    // ✅ Add reaction
+    const existing = existingRows[0];
+    if (Number(existing.user_id) !== Number(userId)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const finalType = type_publication
+      ? normalizeType(type_publication)
+      : existing.type_publication;
+
+    let newTitle = (titre_publication ?? existing.titre_publication ?? "").trim();
+     let newContent = (contenu_publication ?? contenu ?? existing.contenu ?? "").trim();
+
+    if (finalType === "debat" && question_debat?.trim()) {
+      newTitle = question_debat.trim();
+    }
+
     await db.query(
-      `INSERT INTO commentaire_reactions 
-       (id_publication, user_id, reaction_type, created_at)
-       VALUES (?, ?, ?, NOW())`,
-      [id, userId, reaction_type]
+      `UPDATE publications 
+       SET titre_publication = ?, contenu = ?, type_publication = ?, updated_at = NOW()
+       WHERE id_publication = ?`,
+      [newTitle || null, newContent || "", finalType, id]
     );
 
-    console.log("✅ Reaction added");
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        let mediaType = "photo";
+        if (file.mimetype.startsWith("image/")) mediaType = "photo";
+        else if (file.mimetype.startsWith("video/")) mediaType = "video";
+        else if (file.mimetype === "application/pdf") mediaType = "pdf";
 
-    res.json({ message: "Reaction added", reacted: true });
+        const urlMedia = `/uploads/publications/${file.filename}`;
+
+        await db.query(
+          `INSERT INTO publication_medias
+           (id_publication, type_media, url_media, nom_original, taille_fichier, created_at)
+           VALUES (?, ?, ?, ?, ?, NOW())`,
+          [id, mediaType, urlMedia, file.originalname, file.size]
+        );
+      }
+    }
+
+    res.json({ message: "Updated" });
   } catch (err) {
-    console.error("❌ POST /reactions error:", err);
+    console.error("❌ PUT /:id error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===============================
+//  DELETE /publications/:id (soft delete + remove files)
+// ===============================
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id_user;
+    const { id } = req.params;
+
+    const [pubRows] = await db.query(
+      "SELECT * FROM publications WHERE id_publication = ?",
+      [id]
+    );
+    if (!pubRows || pubRows.length === 0) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const pub = pubRows[0];
+    if (Number(pub.user_id) !== Number(userId)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const [medias] = await db.query(
+      "SELECT url_media FROM publication_medias WHERE id_publication = ?",
+      [id]
+    );
+
+    for (const media of medias || []) {
+      try {
+        const filePath = safeDiskPathFromUrlMedia(media.url_media);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (e) {
+        // ignore file errors, keep soft delete
+        console.warn("⚠️ Failed deleting media:", media.url_media, e.message);
+      }
+    }
+
+    await db.query(
+      `UPDATE publications 
+       SET status_publication = 'supprime', updated_at = NOW()
+       WHERE id_publication = ?`,
+      [id]
+    );
+
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    console.error("❌ DELETE /:id error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

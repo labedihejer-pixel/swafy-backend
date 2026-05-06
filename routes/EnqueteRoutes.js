@@ -1,61 +1,46 @@
+console.log("✅ EnqueteRoutes.js LOADED");
+
 const express = require("express");
 const router = express.Router();
-const pool = require("../config/db");
+const db = require("../config/db");
+const { verifyToken } = require("../middleware/authMiddleware");
 
-// ✅ TEST ROUTE (باش نتاكدو)
-router.get("/test", (req, res) => {
-  res.json({ ok: true, message: "✅ Enquete route works" });
+// ✅ TEST ROUTE
+router.get("/ping", (req, res) => {
+  res.json({ ok: true, from: "enquetes/ping" });
 });
 
-// ✅ SATISFACTION TREND
-router.get("/:enqueteId/satisfaction-trend", async (req, res) => {
+// ✅ GET /api/enquetes/lives
+router.get("/lives", verifyToken, async (req, res) => {
   try {
-    const { enqueteId } = req.params;
-    const { period = "month" } = req.query;
-
-    let sql;
-    if (period === "week") {
-      sql = `
-        SELECT
-          YEARWEEK(r.heure_reponse, 1) AS k,
-          MIN(DATE(r.heure_reponse)) AS label,
-          AVG(CAST(r.contenu_reponse AS UNSIGNED)) AS avg_satisfaction,
-          COUNT(*) AS nb_reponses
-        FROM reponses r
-        JOIN questions_enquete q ON q.id_question = r.question_id
-        WHERE q.enquete_id = ?
-          AND r.question_id = 1
-        GROUP BY YEARWEEK(r.heure_reponse, 1)
-        ORDER BY k
-      `;
-    } else {
-      sql = `
-        SELECT 
-          DATE_FORMAT(r.heure_reponse, '%Y-%m') AS label,
-          AVG(CAST(r.contenu_reponse AS UNSIGNED)) AS avg_satisfaction,
-          COUNT(*) AS nb_reponses
-        FROM reponses r
-        JOIN questions_enquete q ON q.id_question = r.question_id
-        WHERE q.enquete_id = ?
-          AND r.question_id = 1
-        GROUP BY DATE_FORMAT(r.heure_reponse, '%Y-%m')
-        ORDER BY label
-      `;
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin seulement" });
     }
 
-    const [rows] = await pool.query(sql, [enqueteId]);
+    const adminId = req.user.id_user;
 
-    res.json({
-      labels: rows.map(r => r.label),
-      datasets: [
-        { label: "Satisfaction moyenne", data: rows.map(r => Number(r.avg_satisfaction)) },
-        { label: "Nb réponses", data: rows.map(r => Number(r.nb_reponses)) },
-      ],
-    });
+    const [rows] = await db.query(`
+      SELECT
+        l.id_live AS id,
+        l.titre_live AS title,
+        l.description_live AS description,
+        l.date_live AS date
+      FROM lives l
+      WHERE l.id_user = ?
+      ORDER BY l.date_live DESC
+    `, [adminId]);
+
+    res.json(rows);
   } catch (err) {
-    console.error("❌ Enquete route error:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    console.error("❌ GET /enquetes/lives", err);
+    res.status(500).json({ message: "Erreur chargement lives" });
   }
+});
+
+// ✅ GET /api/enquetes
+router.get("/", verifyToken, async (req, res) => {
+  const [rows] = await db.query("SELECT * FROM enquetes");
+  res.json(rows);
 });
 
 module.exports = router;
