@@ -42,5 +42,49 @@ router.get("/", verifyToken, async (req, res) => {
   const [rows] = await db.query("SELECT * FROM enquetes");
   res.json(rows);
 });
+// ✅ POST /api/enquetes  (CREATE ENQUETE)
+router.post("/", verifyToken, async (req, res) => {
+  try {
+    const { live_id, titre, description, template } = req.body;
+
+    // ✅ تحقق بسيط
+    if (!titre) {
+      return res.status(400).json({ message: "Titre requis" });
+    }
+
+    // ✅ INSERT مع template
+    await db.query(
+      "INSERT INTO enquetes (live_id, titre, description, template) VALUES (?, ?, ?, ?)",
+      [live_id || null, titre, description, template || "style1"]
+    );
+
+    res.status(201).json({ message: "✅ Enquête créée avec succès" });
+
+  } catch (err) {
+    console.error("❌ CREATE ENQUETE ERROR:", err);
+    res.status(500).json({ message: "Erreur création enquête" });
+  }
+});
+// ✅ CREATE ENQUETE
+router.post("/", verifyToken, async (req, res) => {
+  try {
+    const { live_id, titre, description, template } = req.body;
+
+    if (!titre) {
+      return res.status(400).json({ message: "Titre requis" });
+    }
+
+    await db.query(
+      "INSERT INTO enquetes (live_id, titre, description, template) VALUES (?, ?, ?, ?)",
+      [live_id || null, titre, description, template || "style1"]
+    );
+
+    res.status(201).json({ message: "✅ Enquête créée" });
+
+  } catch (err) {
+    console.error("❌ CREATE ENQUETE ERROR:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
 
 module.exports = router;
