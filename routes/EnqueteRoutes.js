@@ -42,48 +42,132 @@ router.get("/", verifyToken, async (req, res) => {
   const [rows] = await db.query("SELECT * FROM enquetes");
   res.json(rows);
 });
-// ✅ POST /api/enquetes  (CREATE ENQUETE)
+
 router.post("/", verifyToken, async (req, res) => {
   try {
     const { live_id, titre, description, template } = req.body;
 
-    // ✅ تحقق بسيط
     if (!titre) {
       return res.status(400).json({ message: "Titre requis" });
     }
 
-    // ✅ INSERT مع template
-    await db.query(
+    // ✅ مهم: ناخذ result
+    const [result] = await db.query(
       "INSERT INTO enquetes (live_id, titre, description, template) VALUES (?, ?, ?, ?)",
       [live_id || null, titre, description, template || "style1"]
     );
+    res.status(201).json({
+      message: "✅ Enquête créée avec succès",
+      id_enquete: result.insertId   // 🔥 هذا هو الحل
+    });
+      } catch (err) {
+        console.error("❌ CREATE ENQUETE ERROR:", err);
+        res.status(500).json({ message: "Erreur création enquête" });
+      }
+    });
 
-    res.status(201).json({ message: "✅ Enquête créée avec succès" });
+// ✅ POST réponse enquête
+router.post("/:id/reponses", verifyToken, async (req, res) => {
+  try {
+    const enqueteId = req.params.id;
+    const userId = req.user.id_user;
+
+    const { reponses } = req.body;
+    // reponses = [{ question_id, contenu }]
+
+    for (const rep of reponses) {
+      await db.query(
+        "INSERT INTO reponses (id_enquete, id_question, id_user, contenu_reponse) VALUES (?, ?, ?, ?)",
+        [enqueteId, rep.question_id, userId, rep.contenu]
+      );
+    }
+
+    res.json({ message: "✅ Réponses enregistrées" });
 
   } catch (err) {
-    console.error("❌ CREATE ENQUETE ERROR:", err);
-    res.status(500).json({ message: "Erreur création enquête" });
+    console.error("❌ SAVE REPONSES:", err);
+    res.status(500).json({ message: "Erreur save réponses" });
   }
 });
-// ✅ CREATE ENQUETE
-router.post("/", verifyToken, async (req, res) => {
+// ✅ UPDATE QUESTION
+router.put("/:enqueteId/questions/:qid", verifyToken, async (req, res) => {
   try {
-    const { live_id, titre, description, template } = req.body;
-
-    if (!titre) {
-      return res.status(400).json({ message: "Titre requis" });
-    }
+    const { texte, type, options } = req.body;
+    const qid = req.params.qid;
 
     await db.query(
-      "INSERT INTO enquetes (live_id, titre, description, template) VALUES (?, ?, ?, ?)",
-      [live_id || null, titre, description, template || "style1"]
+      "UPDATE questions SET texte = ?, type = ? WHERE id_question = ?",
+      [texte, type, qid]
     );
 
-    res.status(201).json({ message: "✅ Enquête créée" });
+    // ✅ options (إذا مش text)
+    await db.query("DELETE FROM options WHERE id_question = ?", [qid]);
+
+    if (type !== "text" && options?.length > 0) {
+      for (const opt of options) {
+        await db.query(
+          "INSERT INTO options (id_question, contenu) VALUES (?, ?)",
+          [qid, opt]
+        );
+      }
+    }
+  res.json({ message: "✅ Question modifiée" });
 
   } catch (err) {
-    console.error("❌ CREATE ENQUETE ERROR:", err);
-    res.status(500).json({ message: "Erreur serveur" });
+    console.error("❌ UPDATE QUESTION:", err);
+    res.status(500).json({ message: "Erreur update question" });
+  }
+});
+// ✅ DELETE QUESTION
+router.delete("/:enqueteId/questions/:qid", verifyToken, async (req, res) => {
+  try {
+    const { qid } = req.params;
+
+    // نحذف options أولاً
+    await db.query("DELETE FROM options WHERE id_question = ?", [qid]);
+
+    // نحذف السؤال
+    await db.query("DELETE FROM questions WHERE id_question = ?", [qid]);
+
+    res.json({ message: "✅ Question supprimée" });
+
+  } catch (err) {
+    console.error("❌ DELETE QUESTION:", err);
+    res.status(500).json({ message: "Erreur suppression question" });
+  }
+});
+router.get("/:id", verifyToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const [enquete] = await db.query(
+      "SELECT * FROM enquetes WHERE id_enquete = ?",
+      [id]
+    );
+
+    const [questions] = await db.query(
+      "SELECT * FROM questions WHERE id_enquete = ?",
+      [id]
+    );
+
+    for (let q of questions) {
+      if (q.type !== "text") {
+        const [opts] = await db.query(
+          "SELECT contenu FROM options WHERE id_question = ?",
+          [q.id_question]
+        );
+        q.options = opts.map(o => o.contenu);
+      }
+    }
+
+    res.json({
+      ...enquete[0],
+      questions
+    });
+
+  } catch (err) {
+    console.error("❌ GET DETAIL:", err);
+    res.status(500).json({ message: "Erreur chargement enquête" });
   }
 });
 
