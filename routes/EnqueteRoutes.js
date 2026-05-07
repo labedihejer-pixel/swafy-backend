@@ -41,7 +41,7 @@ router.get("/lives", verifyToken, async (req, res) => {
 
 // ✅ GET /api/enquetes
 router.get("/", verifyToken, async (req, res) => {
-  const [rows] = await db.query("SELECT * FROM enquetes");
+  const [rows] = await db.query("SELECT * FROM questions_enquete");
   res.json(rows);
 });
 
@@ -142,8 +142,5 @@ router.delete("/:enqueteId/questions/:qid", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Erreur suppression question" });
   }
 });
-
-
-
 
 module.exports = router;
