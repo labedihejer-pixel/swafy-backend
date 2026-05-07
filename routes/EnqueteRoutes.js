@@ -7,6 +7,7 @@ const { verifyToken } = require("../middleware/authMiddleware");
 
 // ✅ TEST ROUTE
 router.get("/ping", (req, res) => {
+ 
   res.json({ ok: true, from: "enquetes/ping" });
 });
 
@@ -31,6 +32,7 @@ router.get("/lives", verifyToken, async (req, res) => {
 `, [adminId]);
 
     res.json(rows);
+    
   } catch (err) {
     console.error("❌ GET /enquetes/lives", err);
     res.status(500).json({ message: "Erreur chargement lives" });
@@ -66,6 +68,22 @@ router.post("/", verifyToken, async (req, res) => {
       }
     });
 
+router.get("/detail/:id", verifyToken, async (req, res) => {
+  res.json({
+    id_enquete: 999,
+    titre: "TEST ENQUETE",
+    description: "test desc",
+    template: "style3",
+    questions: [
+      {
+        id_question: 1,
+        texte: "Question test ?",
+        type: "text",
+        options: []
+      }
+    ]
+  });
+});
 // ✅ POST réponse enquête
 router.post("/:id/reponses", verifyToken, async (req, res) => {
   try {
@@ -96,22 +114,11 @@ router.put("/:enqueteId/questions/:qid", verifyToken, async (req, res) => {
     const qid = req.params.qid;
 
     await db.query(
-      "UPDATE questions SET texte = ?, type = ? WHERE id_question = ?",
-      [texte, type, qid]
+      "UPDATE questions_enquete SET texte = ?, type = ?, options = ? WHERE  id_question = ?",
+      [texte, type, JSON.stringify(options || []), qid]
     );
 
-    // ✅ options (إذا مش text)
-    await db.query("DELETE FROM options WHERE id_question = ?", [qid]);
-
-    if (type !== "text" && options?.length > 0) {
-      for (const opt of options) {
-        await db.query(
-          "INSERT INTO options (id_question, contenu) VALUES (?, ?)",
-          [qid, opt]
-        );
-      }
-    }
-  res.json({ message: "✅ Question modifiée" });
+    res.json({ message: "✅ Question modifiée" });
 
   } catch (err) {
     console.error("❌ UPDATE QUESTION:", err);
@@ -123,11 +130,10 @@ router.delete("/:enqueteId/questions/:qid", verifyToken, async (req, res) => {
   try {
     const { qid } = req.params;
 
-    // نحذف options أولاً
-    await db.query("DELETE FROM options WHERE id_question = ?", [qid]);
-
-    // نحذف السؤال
-    await db.query("DELETE FROM questions WHERE id_question = ?", [qid]);
+    await db.query(
+      "DELETE FROM questions_enquete WHERE id_question = ?",
+      [qid]
+    );
 
     res.json({ message: "✅ Question supprimée" });
 
@@ -136,39 +142,8 @@ router.delete("/:enqueteId/questions/:qid", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Erreur suppression question" });
   }
 });
-router.get("/:id", verifyToken, async (req, res) => {
-  try {
-    const id = req.params.id;
 
-    const [enquete] = await db.query(
-      "SELECT * FROM enquetes WHERE id_enquete = ?",
-      [id]
-    );
 
-    const [questions] = await db.query(
-      "SELECT * FROM questions WHERE id_enquete = ?",
-      [id]
-    );
 
-    for (let q of questions) {
-      if (q.type !== "text") {
-        const [opts] = await db.query(
-          "SELECT contenu FROM options WHERE id_question = ?",
-          [q.id_question]
-        );
-        q.options = opts.map(o => o.contenu);
-      }
-    }
-
-    res.json({
-      ...enquete[0],
-      questions
-    });
-
-  } catch (err) {
-    console.error("❌ GET DETAIL:", err);
-    res.status(500).json({ message: "Erreur chargement enquête" });
-  }
-});
 
 module.exports = router;
