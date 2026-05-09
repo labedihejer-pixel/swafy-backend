@@ -37,22 +37,22 @@ router.get("/lives", verifyToken, async (req, res) => {
 ══════════════════════════════════════════ */
 router.get("/", verifyToken, async (req, res) => {
   try {
-    const [rows] = await db.query(`
-      SELECT
-        e.*,
-        l.title AS live_title,
-        COUNT(DISTINCT q.id_question) AS nb_questions,
-        COUNT(DISTINCT r.id_user)     AS nb_repondants
-      FROM enquetes e
-      LEFT JOIN lives l              ON l.id = e.live_id
-      LEFT JOIN questions_enquete q  ON q.id_enquete = e.id_enquete
-      LEFT JOIN reponses r           ON r.id_enquete = e.id_enquete
-      GROUP BY e.id_enquete
-      ORDER BY e.date_creation DESC
-    `);
+   
+const [rows] = await db.query(`
+  SELECT
+    e.id_enquete,
+    e.titre,
+    e.description,
+    e.date_creation,
+    l.title AS live_title
+  FROM enquetes e
+  LEFT JOIN lives l ON l.id = e.live_id
+  ORDER BY e.date_creation DESC
+`);
+
     res.json(rows);
   } catch (err) {
-    console.error("❌ GET /enquetes", err);
+    console.error("❌ GET /enquetes ERROR:", err.message);
     res.status(500).json({ message: "Erreur chargement enquêtes" });
   }
 });
@@ -95,13 +95,24 @@ router.get("/detail/:id", verifyToken, async (req, res) => {
     if (!rows.length) return res.status(404).json({ message: "Enquête introuvable" });
 
     const [qs] = await db.query(
-      "SELECT * FROM questions_enquete WHERE id_enquete = ? ORDER BY id_question ASC",
+      "SELECT * FROM questions_enquete WHERE enquete_id = ? ORDER BY id_question ASC",
       [id]
     );
-    const questions = qs.map(q => ({
-      ...q,
-      options: q.options ? JSON.parse(q.options) : []
-    }));
+    const questions = qs.map(q => {
+  let opts = [];
+
+  try {
+    opts = q.options ? JSON.parse(q.options) : [];
+  } catch (err) {
+    console.log("❌ JSON ERROR OPTIONS:", q.options);
+    opts = [];
+  }
+
+  return {
+    ...q,
+    options: opts
+  };
+});
 
     res.json({ ...rows[0], questions });
   } catch (err) {
@@ -117,8 +128,8 @@ router.get("/detail/:id", verifyToken, async (req, res) => {
 router.delete("/:id", verifyToken, async (req, res) => {
   try {
     if (req.user.role !== "admin") return res.status(403).json({ message: "Admin seulement" });
-    await db.query("DELETE FROM questions_enquete WHERE id_enquete = ?", [req.params.id]);
-    await db.query("DELETE FROM reponses WHERE id_enquete = ?", [req.params.id]);
+    await db.query("DELETE FROM questions_enquete WHERE enquete_id = ?", [req.params.id]);
+   await db.query("DELETE FROM reponses_enquete WHERE enquete_id = ?", [req.params.id]);
     await db.query("DELETE FROM enquetes WHERE id_enquete = ?", [req.params.id]);
     res.json({ message: "✅ Enquête supprimée" });
   } catch (err) {
@@ -138,7 +149,7 @@ router.post("/:id/questions", verifyToken, async (req, res) => {
     if (!texte) return res.status(400).json({ message: "Texte requis" });
 
     const [result] = await db.query(
-      "INSERT INTO questions_enquete (id_enquete, texte, type, options) VALUES (?, ?, ?, ?)",
+      "INSERT INTO questions_enquete (enquete_id, texte, type, options) VALUES (?, ?, ?, ?)",
       [req.params.id, texte, type || "text", JSON.stringify(options || [])]
     );
     res.status(201).json({ message: "✅ Question ajoutée", id_question: result.insertId });
@@ -203,7 +214,7 @@ router.post("/:id/partager", verifyToken, async (req, res) => {
 
     /* 2. récupérer tous les jeunes */
     const [jeunes] = await db.query(
-      "SELECT id_user FROM users WHERE role = 'jeune_profile'"
+      "SELECT id_user FROM users WHERE role = 'jeune_profiles'"
     );
     if (!jeunes.length) return res.json({ message: "Aucun jeune trouvé", sent: 0 });
 
@@ -248,14 +259,14 @@ router.post("/:id/reponses", verifyToken, async (req, res) => {
 
     /* vérifier si déjà répondu */
     const [already] = await db.query(
-      "SELECT id FROM reponses WHERE id_enquete = ? AND id_user = ? LIMIT 1",
-      [enqueteId, userId]
-    );
+  "SELECT id_reponse FROM reponses_enquete WHERE enquete_id = ? AND user_id = ? LIMIT 1",
+  [enqueteId, userId]
+);
     if (already.length) return res.status(409).json({ message: "Vous avez déjà répondu à cette enquête" });
 
     for (const rep of reponses) {
       await db.query(
-        "INSERT INTO reponses (id_enquete, id_question, id_user, contenu_reponse, heure_reponse) VALUES (?, ?, ?, ?, NOW())",
+        "INSERT INTO reponses_enquete (enquete_id, question_id, user_id, contenu_reponse, heure_reponse) VALUES (?, ?, ?, ?, NOW())",
         [enqueteId, rep.question_id, userId, rep.contenu]
       );
     }
@@ -282,26 +293,31 @@ router.get("/:id/stats", verifyToken, async (req, res) => {
     const id = req.params.id;
 
     const [nb] = await db.query(
-      "SELECT COUNT(DISTINCT id_user) AS nb FROM reponses WHERE id_enquete = ?",
-      [id]
-    );
+  "SELECT COUNT(DISTINCT user_id) AS nb FROM reponses_enquete WHERE enquete_id = ?",
+  [id]
+);
 
     const [qs] = await db.query(
-      "SELECT * FROM questions_enquete WHERE id_enquete = ? ORDER BY id_question ASC",
+      "SELECT * FROM questions_enquete WHERE enquete_id = ? ORDER BY id_question ASC",
       [id]
     );
 
     const questions = await Promise.all(qs.map(async q => {
       const [reps] = await db.query(
         `SELECT r.*, u.nom AS nom_user, u.prenom AS prenom_user
-         FROM reponses r
+         FROM reponses_enquete r
          JOIN users u ON u.id_user = r.id_user
-         WHERE r.id_enquete = ? AND r.id_question = ?`,
+         WHERE r.enquete_id = ? AND r.question_id = ?`,
         [id, q.id_question]
       );
 
       let distribution = null;
-      const opts = q.options ? JSON.parse(q.options) : [];
+      let opts = [];
+        try {
+          opts = q.options ? JSON.parse(q.options) : [];
+        } catch {
+          opts = [];
+        }
       if (opts.length > 0) {
         distribution = {};
         opts.forEach(o => { distribution[o] = 0; });
