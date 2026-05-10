@@ -1,16 +1,21 @@
 const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-
+const https = require("https");
 const seedAdmin = async () => {
   const email = "admin@gmail.com";
   const plainPassword = "adminadmin";
 
-  // نمسحو admin القديم مهما كان
-  await db.execute(
-    "DELETE FROM utilisateurs WHERE email_user = ?",
+  // ✅ شيك هل موجود
+  const [rows] = await db.execute(
+    "SELECT * FROM utilisateurs WHERE email_user = ?",
     [email]
   );
+
+  if (rows.length > 0) {
+    console.log("✅ Admin already exists");
+    return;
+  }
 
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
@@ -21,9 +26,8 @@ const seedAdmin = async () => {
     ["Admin", email, hashedPassword, "admin", "actif"]
   );
 
-  console.log("✅ ADMIN SEEDED SUCCESSFULLY (admin@gmail.com / adminadmin)");
+  console.log("✅ ADMIN CREATED ONCE");
 };
-
 
 
 const login = async (req, res) => {
@@ -101,15 +105,29 @@ const register = async (req, res) => {
   }
 };
 
-const nodemailer = require("nodemailer");
+
 
 const sendPassword = async (req, res) => {
-   console.log("🔥 REAL MAILTRAP VERSION LOADED 🔥");
+  console.log("✅ EMAIL SYSTEM (BREVO) READY");
   try {
     const { email_user } = req.body;
 
     if (!email_user) {
       return res.status(400).json({ message: "Email requis" });
+    }
+    // ✅ CHECK if user exists
+    const [existing] = await db.query(
+      "SELECT * FROM utilisateurs WHERE email_user = ?",
+      [email_user]
+    );
+
+    if (!existing.length) {
+      // ✅ إذا ما فماش → نخلق row مؤقتة
+      await db.query(
+        `INSERT INTO utilisateurs (email_user, role, status_user)
+        VALUES (?, 'jeune', 'inactif')`,
+        [email_user]
+      );
     }
 
     // ✅ كود عشوائي
@@ -118,29 +136,43 @@ const sendPassword = async (req, res) => {
   "UPDATE utilisateurs SET verification_code = ?, verification_expires = DATE_ADD(NOW(), INTERVAL 10 MINUTE) WHERE email_user = ?",
   [code, email_user]
 );
-    // ✅ Transporter Mailtrap
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+   
+  const data = JSON.stringify({
+  sender: {
+    name: "Swafy",
+    email: process.env.SENDER_EMAIL
+  },
+  to: [{ email: email_user }],
+  subject: "Code de vérification - Swafy",
+  htmlContent: `<h1>${code}</h1>`
+});
 
-    // ✅ إرسال الإيميل
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM,
-      to: email_user,
-      subject: "Code de vérification - Swafy",
-      html: `
-        <h2>Bienvenue sur Swafy</h2>
-        <p>Votre code de vérification est :</p>
-        <h1>${code}</h1>
-      `,
-    });
+const reqMail = https.request({
+  hostname: "api.brevo.com",
+  path: "/v3/smtp/email",
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "api-key": process.env.BREVO_API_KEY,
+    "Content-Length": Buffer.byteLength(data)
+  }
+}, (response) => {
+  let body = "";
+  response.on("data", chunk => body += chunk);
+  response.on("end", () => {
+    if (response.statusCode === 201) {
+      console.log("✅ Email envoyé via Brevo");
+    } else {
+      console.error("❌ Brevo error:", body);
+    }
+  });
+});
 
-    console.log("📩 Email envoyé via Mailtrap à:", email_user);
+reqMail.write(data);
+reqMail.end();
+   
+
+    
 
     res.json({ success: true, message: "Code envoyé" });
 
@@ -169,9 +201,10 @@ const verifyCode = async (req, res) => {
     if (!rows.length) {
       return res.status(401).json({ message: "Code incorrect ou expiré" });
     }
+  
 
     const user = rows[0];
-
+      
     // ✅ نمسحو الكود بعد التحقّق
     await db.query(
       "UPDATE utilisateurs SET verification_code = NULL, verification_expires = NULL WHERE email_user = ?",
@@ -207,61 +240,95 @@ const verifyCode = async (req, res) => {
 // ✅ REGISTER FINAL (PRODUCTION)
 // ===============================
 const registerFinal = async (req, res) => {
-  const {
-    nom_user,
-    prenom_user,
-    date_naissance,
-    sexe,
-    gouvernorat,
-    delegation,
-    ville,
-    etablissement,
-    statut,
-    email_user,
-    mot_de_passe_user
-  } = req.body;
+ const {
+  nom_user,
+  prenom_user,
+  date_naissance,
+  sexe,
+  gouvernorat,
+  delegation, 
+  ville,
+  etablissement,
+  statut,
+  email_user,
+  mot_de_passe_user
+} = req.body;
 
   try {
-    // ✅ 0️⃣ تشفير كلمة السر
+    // ✅ 1. check code
+    const [rows] = await db.query(
+      `SELECT * FROM utilisateurs 
+       WHERE email_user = ? 
+       AND verification_code = ?
+       AND verification_expires > NOW()`,
+      [email_user, mot_de_passe_user]
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({
+        message: "Code incorrect ou expiré ❌"
+      });
+    }
+
+    // ✅ 2. hash password
     const hashedPassword = await bcrypt.hash(mot_de_passe_user, 10);
 
-    // ✅ 1️⃣ INSERT utilisateur
-    const [result] = await db.query(
-      `INSERT INTO utilisateurs
-       (nom_user, prenom_user, date_naissance, sexe,
-        email_user, mot_de_passe_user, role, status_user)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    // ✅ 3. update user
+    await db.query(
+      `UPDATE utilisateurs
+       SET nom_user = ?, prenom_user = ?, date_naissance = ?, sexe = ?,
+           mot_de_passe_user = ?, role = 'jeune', status_user = 'actif'
+       WHERE email_user = ?`,
       [
         nom_user,
         prenom_user,
         date_naissance,
         sexe,
-        email_user,
         hashedPassword,
-        "jeune",
-        "actif"
+        email_user
       ]
     );
 
-    const userId = result.insertId; // ✅ id_user
+    // ✅ 4. get userId
+    const [userRow] = await db.query(
+      "SELECT id_user FROM utilisateurs WHERE email_user = ?",
+      [email_user]
+    );
+    const userId = userRow[0].id_user;
 
-    // ✅ 2️⃣ INSERT dans jeune_profiles
+    // ✅ 5. check profile
+    const [existingProfile] = await db.query(
+      "SELECT * FROM jeune_profiles WHERE user_id = ?",
+      [userId]
+    );
+
+    // ✅ 6. insert profile only once
+    if (!existingProfile.length) {
+      await db.query(
+        `INSERT INTO jeune_profiles
+         (user_id, gouvernorat_jeune, delegation, ville, etablissement, statut, date_naissance, sexe)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          userId,
+          gouvernorat,
+          delegation,
+          ville,
+          etablissement,
+          statut,
+          delegation,
+          date_naissance,
+          sexe
+        ]
+      );
+    }
+
+    // ✅ 7. clear verification code
     await db.query(
-      `INSERT INTO jeune_profiles
-       (user_id, gouvernorat_jeune, delegation, ville, etablissement, statut, date_naissance, sexe)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        userId,
-        gouvernorat,
-        delegation,
-        ville,
-        etablissement,
-        statut,
-        date_naissance,
-        sexe
-      ]
+      "UPDATE utilisateurs SET verification_code = NULL, verification_expires = NULL WHERE email_user = ?",
+      [email_user]
     );
 
+    // ✅ SUCCESS
     res.status(201).json({
       success: true,
       message: "✅ Inscription jeune réussie",

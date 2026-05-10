@@ -29,44 +29,17 @@ module.exports = (server) => {
       next(new Error("Invalid token"));
     }
   });
+ io.on("connection", (socket) => {
+  const userId = socket.user.id_user;
+  users.set(userId, socket.id);
 
-  // ✅ Connection
-  io.on("connection", (socket) => {
-    const userId = socket.user.id_user;
-    users.set(userId, socket.id);
+  console.log(`✅ User ${userId} connected`);
 
-    console.log(`✅ User ${userId} connected. Socket ID: ${socket.id}`);
-    console.log(`📊 Active users: ${users.size}`);
-
-    // ✅ Event: جديد message من Jeune → Admin
-    socket.on("new_message", (data) => {
-      const { conversationId, senderId, recipientId, text, timestamp } = data;
-
-      console.log(`📨 New message from ${senderId} to ${recipientId}:`, text);
-
-      // ✅ أرسل notification لـ Admin
-      if (users.has(recipientId)) {
-        const recipientSocketId = users.get(recipientId);
-        io.to(recipientSocketId).emit("message_notification", {
-          conversationId,
-          senderId,
-          text,
-          timestamp,
-          senderName: data.senderName
-        });
-
-        console.log(`🔔 Notification sent to user ${recipientId}`);
-      } else {
-        console.log(`⚠️ User ${recipientId} not online`);
-      }
-    });
-
-    // ✅ Disconnect
-    socket.on("disconnect", () => {
-      users.delete(userId);
-      console.log(`❌ User ${userId} disconnected. Active users: ${users.size}`);
-    });
+  socket.on("disconnect", () => {
+    users.delete(userId);
   });
+});
 
+  
   return io;
 };

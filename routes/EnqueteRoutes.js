@@ -36,24 +36,14 @@ router.get("/lives", verifyToken, async (req, res) => {
    → liste de toutes les enquêtes
 ══════════════════════════════════════════ */
 router.get("/", verifyToken, async (req, res) => {
-  try {
-   
-const [rows] = await db.query(`
-  SELECT
-    e.id_enquete,
-    e.titre,
-    e.description,
-    e.date_creation,
-    l.title AS live_title
-  FROM enquetes e
-  LEFT JOIN lives l ON l.id = e.live_id
-  ORDER BY e.date_creation DESC
-`);
+  console.log("🚨 NEW VERSION WORKING");
 
+  try {
+    const [rows] = await db.query("SELECT * FROM enquetes");
     res.json(rows);
   } catch (err) {
-    console.error("❌ GET /enquetes ERROR:", err.message);
-    res.status(500).json({ message: "Erreur chargement enquêtes" });
+    console.error("ERROR TEST:", err.message);
+    res.status(500).json({ message: "test error" });
   }
 });
 

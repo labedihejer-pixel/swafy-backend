@@ -71,6 +71,7 @@ app.get("/", (req, res) => {
   res.json({ message: "🚀 Serveur lancé avec succès" });
 });
 
+
 // ===============================
 // ✅ SOCKET.IO
 // ===============================
@@ -80,7 +81,7 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
   },
 });
-
+app.set("io", io);
 const roomUsers = {};
 const socketRoomMap = {};
 
