@@ -1,4 +1,5 @@
 exports.createPublication = async (req, res) => {
+  console.log("🔥 CREATE PUBLICATION HIT");
   try {
     if (req.user.role !== "admin") {
       return res.status(403).json({ message: "Admin uniquement" });
@@ -12,42 +13,63 @@ exports.createPublication = async (req, res) => {
     } = req.body;
 
     const userId = req.user.id_user;
-
-    // ✅ file (photo / video / pdf)
     const mediaPath = req.file ? req.file.path : null;
 
     const [result] = await db.query(
-      `INSERT INTO publications
-       (user_id, titre_publication, type_publication, contenu, question_debat, media_path, status_publication, date_publication)
-       VALUES (?, ?, ?, ?, ?, ?, 'publie', NOW())`,
-      [
-        userId,
-        titre_publication || null,
-        type_publication,
-        contenu || null,
-        question_debat || null,
-        mediaPath
-      ]
-    );
+  `INSERT INTO publications
+   (user_id, titre_publication, type_publication, contenu, question_debat, media_path, status_publication, date_publication)
+   VALUES (?, ?, ?, ?, ?, ?, 'publie', NOW())`,
+  [
+    userId,
+    titre_publication || null,
+    type_publication,
+    contenu || null,
+    question_debat || null,
+    mediaPath
+  ]
+);
 
-    res.json({
-      message: "✅ Publication créée",
-      publicationId: result.insertId
-    });
+const publicationId = result.insertId;
 
-  } catch (error) {
-    console.error("❌ createPublication error:", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
+// ✅ message
+const notifMessage = "📢 Nouvelle publication ajoutée";
+
+// ✅ admin id (ديناميك)
+const adminId = req.user.id_user;
+
+// ✅ insert notif للadmin فقط
+await db.query(
+  `INSERT INTO notifications
+  (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
+  [
+    adminId,
+    userId,
+    "new_post",
+    "publication",
+    publicationId,
+    notifMessage
+  ]
+);
+
+// ✅ بعد كل شي نرجع response
+res.json({
+  message: "✅ Publication créée + notifications envoyées",
+  publicationId
+});
+
+} catch (error) {
+  console.error("❌ createPublication error:", error);
+  res.status(500).json({ message: "Erreur serveur" });
+}
 };
+
 exports.getAllPublications = async (req, res) => {
   try {
     const [rows] = await db.query(
       "SELECT * FROM publications WHERE status_publication = 'publie'"
     );
-
-    console.log("📌 publications from DB:", rows); // ✅ debug
-
+    console.log(" publications from DB:", rows); 
     res.json(rows);
   } catch (error) {
     console.error("getAllPublications error:", error);
@@ -57,16 +79,13 @@ exports.getAllPublications = async (req, res) => {
 exports.getOnePublication = async (req, res) => {
   try {
     const { id } = req.params;
-
     const [rows] = await db.query(
       "SELECT * FROM publications WHERE id_publication = ?",
       [id]
     );
-
     if (rows.length === 0) {
       return res.status(404).json({ message: "Publication introuvable" });
     }
-
     res.json(rows[0]);
   } catch (error) {
     console.error("getOnePublication error:", error);
@@ -136,6 +155,8 @@ exports.addReaction = async (req, res) => {
     res.status(500).json({ message: "Erreur reaction publication" });
   }
 };
+
+
 exports.addCommentReaction = async (req, res) => {
   try {
     const { id_commentaire, type_reaction } = req.body;
@@ -156,6 +177,7 @@ exports.addCommentReaction = async (req, res) => {
     res.status(500).json({ message: "Erreur reaction commentaire" });
   }
 };
+
 exports.addComment = async (req, res) => {
   try {
     const { id_publication, contenu, parent_id } = req.body;

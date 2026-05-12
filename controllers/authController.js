@@ -3,8 +3,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const https = require("https");
 const seedAdmin = async () => {
-  const email = "admin@gmail.com";
-  const plainPassword = "adminadmin";
+const email = "admin@gmail.com";
+const plainPassword = "adminadmin";
 
   // ✅ شيك هل موجود
   const [rows] = await db.execute(
@@ -20,12 +20,10 @@ const seedAdmin = async () => {
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
   await db.execute(
-    `INSERT INTO utilisateurs 
-     (nom_user, email_user, mot_de_passe_user, role, status_user)
-     VALUES (?, ?, ?, ?, ?)`,
-    ["Admin", email, hashedPassword, "admin", "actif"]
-  );
-
+  `INSERT INTO utilisateurs (nom_user, email_user, mot_de_passe_user, role, status_user)
+   VALUES (?, ?, ?, ?, ?)`,
+  ["Admin", email, hashedPassword, "admin", "actif"]
+);
   console.log("✅ ADMIN CREATED ONCE");
 };
 
@@ -105,82 +103,49 @@ const register = async (req, res) => {
   }
 };
 
-
-
 const sendPassword = async (req, res) => {
-  console.log("✅ EMAIL SYSTEM (BREVO) READY");
+  console.log("✅ EMAIL SYSTEM (TEST MODE)");
+
   try {
     const { email_user } = req.body;
 
-    if (!email_user) {
-      return res.status(400).json({ message: "Email requis" });
-    }
-    // ✅ CHECK if user exists
     const [existing] = await db.query(
       "SELECT * FROM utilisateurs WHERE email_user = ?",
       [email_user]
     );
 
     if (!existing.length) {
-      // ✅ إذا ما فماش → نخلق row مؤقتة
       await db.query(
-        `INSERT INTO utilisateurs (email_user, role, status_user)
-        VALUES (?, 'jeune', 'inactif')`,
+        `INSERT INTO utilisateurs (nom_user, email_user, role, status_user)
+         VALUES ('temp', ?, 'jeune', 'inactif')`,
         [email_user]
       );
     }
 
-    // ✅ كود عشوائي
     const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    console.log("📩 CODE:", code); 
+
     await db.query(
-  "UPDATE utilisateurs SET verification_code = ?, verification_expires = DATE_ADD(NOW(), INTERVAL 10 MINUTE) WHERE email_user = ?",
-  [code, email_user]
-);
-   
-  const data = JSON.stringify({
-  sender: {
-    name: "Swafy",
-    email: process.env.SENDER_EMAIL
-  },
-  to: [{ email: email_user }],
-  subject: "Code de vérification - Swafy",
-  htmlContent: `<h1>${code}</h1>`
-});
+      `UPDATE utilisateurs 
+       SET verification_code = ?, verification_expires = DATE_ADD(NOW(), INTERVAL 10 MINUTE) 
+       WHERE email_user = ?`,
+      [code, email_user]
+    );
 
-const reqMail = https.request({
-  hostname: "api.brevo.com",
-  path: "/v3/smtp/email",
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "api-key": process.env.BREVO_API_KEY,
-    "Content-Length": Buffer.byteLength(data)
-  }
-}, (response) => {
-  let body = "";
-  response.on("data", chunk => body += chunk);
-  response.on("end", () => {
-    if (response.statusCode === 201) {
-      console.log("✅ Email envoyé via Brevo");
-    } else {
-      console.error("❌ Brevo error:", body);
-    }
-  });
-});
-
-reqMail.write(data);
-reqMail.end();
-   
-
-    
-
-    res.json({ success: true, message: "Code envoyé" });
+    // ✅ IMPORTANT: ما نبعتش email توّا
+    return res.json({
+      success: true,
+      message: "Code généré ✅",
+      code  // 👈 باش تشوفه في Network
+    });
 
   } catch (err) {
-    console.error("❌ sendPassword error:", err);
-    res.status(500).json({ message: "Erreur envoi email" });
+    console.error(err);
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
+
 
 // ===============================
 // ✅ VERIFY CODE (TEST MODE)
@@ -315,7 +280,6 @@ const registerFinal = async (req, res) => {
           ville,
           etablissement,
           statut,
-          delegation,
           date_naissance,
           sexe
         ]

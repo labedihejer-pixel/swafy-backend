@@ -2,15 +2,22 @@ const db = require("../config/db");
 
 exports.getMyNotifications = async (req, res) => {
   try {
+    console.log("CONNECTED USER ID:", req.user.id_user);
     const userId = req.user.id_user;
 
-    const [rows] = await db.query(`
-      SELECT n.*
-      FROM notifications n
-      WHERE n.id_user_to = ?
-      ORDER BY n.created_at DESC
-    `, [userId]);
-
+   const [rows] = await db.query(`
+  SELECT
+    n.*,
+    u.nom_user,
+    u.prenom_user,
+    u.photo_user
+  FROM notifications n
+  LEFT JOIN utilisateurs u
+    ON u.id_user = n.id_user_from
+  WHERE n.id_user_to = ?
+  ORDER BY n.created_at DESC
+`, [userId]);
+console.log("NOTIFICATIONS:", rows);
     const [[unread]] = await db.query(`
       SELECT COUNT(*) AS unread_count
       FROM notifications

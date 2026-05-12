@@ -1,4 +1,4 @@
-// routes/PublicationRoutes.js
+console.log("✅ PublicationRoutes LOADED");// routes/PublicationRoutes.js
 const express = require("express");
 const router = express.Router();
 const db = require("../config/db");
@@ -6,7 +6,7 @@ const { verifyToken } = require("../middleware/authMiddleware");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-
+const adminId = 286;
 // ===============================
 // ✅ Setup multer
 // ===============================
@@ -47,14 +47,19 @@ const upload = multer({
 const normalizeType = (t) => {
   const typeMap = {
     text: "texte",
-    image: "photo",
-    video: "video",
-    pdf: "pdf",
     texte: "texte",
+
+    image: "photo",
     photo: "photo",
+
+    video: "video",
+
+    pdf: "pdf",
+
     debat: "debat",
   };
-  return typeMap[t] || "texte";
+
+  return typeMap[String(t).toLowerCase()] || "texte";
 };
 
 const buildReactionsObject = (rows) => {
@@ -92,7 +97,7 @@ router.get("/public", async (req, res) => {
         (SELECT COUNT(*) FROM publication_reactions pr WHERE pr.id_publication = p.id_publication) AS reactions_count
       FROM publications p
       LEFT JOIN utilisateurs u ON p.user_id = u.id_user
-      WHERE p.status_publication != 'public'
+      WHERE p.status_publication != 'supprime'
       ORDER BY p.updated_at DESC
 
     `);
@@ -166,13 +171,17 @@ router.get("/", verifyToken, async (req, res) => {
 // supports multipart (files[]) + also supports body "contenu" coming from frontend
 // ===============================
 router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
+  console.log("🔥🔥🔥 POST /publications HIT 🔥🔥🔥");
+  console.log("🔥 POST /publications — NEW CODE RUNNING"); 
+  console.log("🚀 BEFORE INSERT NOTIF");
   try {
     const userId = req.user.id_user;
+    console.log("🚀 INSERTING NOTIF...");
 
     const {
       titre_publication,
       contenu_publication,
-      contenu, // ✅ frontend sometimes sends "contenu"
+      contenu,
       type_publication = "texte",
       question_debat,
     } = req.body;
@@ -182,38 +191,69 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
     let finalTitle = (titre_publication || "").trim();
     let finalContent = (contenu_publication ?? contenu ?? "").trim();
 
-    // debat: question_debat as title (if provided)
     if (finalType === "debat" && question_debat?.trim()) {
       finalTitle = question_debat.trim();
     }
 
     const hasFiles = req.files && req.files.length > 0;
     if (!finalTitle && !finalContent && !hasFiles) {
-      return res
-        .status(400)
-        .json({ error: "Write something or upload a file" });
+      return res.status(400).json({ error: "Write something or upload a file" });
     }
 
-    // ✅ check user exists
     const [userExists] = await db.query(
       "SELECT id_user FROM utilisateurs WHERE id_user = ?",
       [userId]
     );
     if (!userExists || userExists.length === 0) {
-      return res.status(401).json({ error: "User not found - please re-login" });
+      return res.status(401).json({ error: "User not found" });
     }
 
-    // Insert publication
     const [result] = await db.query(
-      `INSERT INTO publications
-      (user_id, titre_publication, contenu, type_publication, created_at, status_publication)
-      VALUES (?, ?, ?, ?, NOW(), 'public')`,
-      [userId, finalTitle || null, finalContent || "", finalType]
-    );
+  `INSERT INTO publications
+   (
+     user_id,
+     titre_publication,
+     contenu,
+     type_publication,
+     created_at,
+     status_publication
+   )
+   VALUES (?, ?, ?, ?, NOW(), ?)`,
+  [
+    userId,
+    finalTitle || null,
+    finalContent || "",
+    finalType,
+    "publie"
+  ]
+);
+    
+    console.log("RESULT INSERT:", result);
+    const publicationId = result?.insertId || result?.[0]?.insertId;
 
-    const publicationId = result.insertId;
+    console.log("publicationId FIXED:", publicationId);
+    console.log("VALUES TEST:", userId, publicationId);
+    
 
-    // Insert medias
+
+let notifMessage = " Nouvelle publication ajoutée";
+console.log(" BEFORE INSERT NOTIF");
+await db.query(
+  `INSERT INTO notifications
+  (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
+  [
+    userId,          // admin connecté
+    userId,
+    "new_post",
+    "publication",
+    publicationId,
+    notifMessage,
+  ]
+);
+
+console.log(" notification admin créée ");
+    //  INSERT medias
     if (hasFiles) {
       for (const file of req.files) {
         let mediaType = "photo";
@@ -231,30 +271,19 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
         );
       }
     }
-
-    // Return created publication
+  
+    // ✅ Return
     const [[pub]] = await db.query(
-      `SELECT 
-        p.id_publication,
-        p.user_id,
-        p.titre_publication,
-        p.contenu,
-        p.type_publication,
-        
-          p.created_at,
-          p.updated_at,
-        u.nom_user,
-        u.prenom_user
-      FROM publications p
-      LEFT JOIN utilisateurs u ON p.user_id = u.id_user
-      WHERE p.id_publication = ?`,
+      `SELECT p.*, u.nom_user, u.prenom_user
+       FROM publications p
+       LEFT JOIN utilisateurs u ON p.user_id = u.id_user
+       WHERE p.id_publication = ?`,
       [publicationId]
     );
 
     const [medias] = await db.query(
       `SELECT id_media, type_media, url_media, nom_original
-       FROM publication_medias
-       WHERE id_publication = ?`,
+       FROM publication_medias WHERE id_publication = ?`,
       [publicationId]
     );
 
@@ -265,12 +294,13 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
       reactions_count: 0,
       reactions: { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 },
     });
-  } catch (err) {
-    console.error("❌ POST /publications error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+ 
+} catch (err) {
+  console.error("🔥 FULL ERROR:", err);
+  res.status(500).json({ error: err.message });
+}
 
+});
 // ===============================
 // 💬 POST /publications/:id/comments
 // ===============================
@@ -284,12 +314,24 @@ router.post("/:id/comments", verifyToken, async (req, res) => {
       return res.status(400).json({ error: "Comment required" });
     }
 
-    const [result] = await db.query(
-      `INSERT INTO publication_commentaires
-       (id_publication, id_user, contenu, type_commentaire, statut_commentaire, created_at)
-       VALUES (?, ?, ?, ?, 'visible', NOW())`,
-      [id, userId, contenu_commentaire.trim(), type_commentaire]
-    );
+ const [result] = await db.query(
+  `INSERT INTO publication_commentaires
+   (
+     id_publication,
+     id_user,
+     contenu,
+     type_commentaire,
+     statut_commentaire,
+     created_at
+   )
+   VALUES (?, ?, ?, ?, 'visible', NOW())`,
+  [
+    id,
+    userId,
+    contenu_commentaire.trim(),
+    type_commentaire,
+  ]
+);
 
     const [[comment]] = await db.query(
       `SELECT 
