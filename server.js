@@ -73,23 +73,25 @@ app.get("/", (req, res) => {
 
 const { sendEmail } = require("./utils/mailer");
 
-app.get("/test-email", async (req, res) => {
+app.get("/api/test-email", async (req, res) => {
   try {
     await sendEmail(
-      "email_k@gmail.com", // 🔁 بدّلها بالإيميل متاعك
+      "labedihejer@gmail.com",
       "Test Swafy ✅",
-      `
-      <p>Bonjour 👋</p>
-      <p>Email test fonctionne correctement ✅</p>
-      `
+      "<p>Email OK ✅</p>"
     );
 
-    res.send("✅ Email envoyé !");
+    res.json({ success: true });
+
   } catch (err) {
-    console.error(err);
-    res.send("❌ Erreur email");
+    console.error("❌ ERROR FULL:", err); // ✅ مهم
+    res.json({
+      success: false,
+      error: err.message
+    });
   }
 });
+
 // ===============================
 // ✅ SOCKET.IO
 // ===============================
