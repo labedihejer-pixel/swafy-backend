@@ -43,8 +43,6 @@ const [jeunes] = await db.query(
   "SELECT id_user FROM utilisateurs WHERE role = 'jeune'"
 );
 
-console.log("👥 JEUNES FOUND:", jeunes);
-
 for (const jeune of jeunes) {
   console.log("📤 SEND NOTIF TO:", jeune.id_user);
 
@@ -53,8 +51,8 @@ for (const jeune of jeunes) {
     (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
     [
-      jeune.id_user,
-      userId,
+      jeune.id_user,      // ✅ TO (jeune)
+      userId,             // ✅ FROM (admin)
       "new_post",
       "publication",
       publicationId,
@@ -69,7 +67,7 @@ res.json({
 });
 
 } catch (error) {
-  console.error("❌ createPublication error:", error);
+  console.error(" createPublication error:", error);
   res.status(500).json({ message: "Erreur serveur" });
 }
 };
