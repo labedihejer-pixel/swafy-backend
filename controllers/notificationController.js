@@ -2,8 +2,8 @@ const db = require("../config/db");
 
 exports.getMyNotifications = async (req, res) => {
   try {
-    console.log("CONNECTED USER ID:", req.user.id_user);
-    const userId = req.user.id_user;
+    
+    const userId = 1;
 
    const [rows] = await db.query(`
   SELECT
@@ -65,7 +65,7 @@ exports.markAllRead = async (req, res) => {
       return res.status(200).json({ message: "OK" });
     }
 
-    const userId = req.user.id_user;
+    const userId = 1;
 
     await db.query(
       "UPDATE notifications SET is_read = 1 WHERE id_user_to = ?",

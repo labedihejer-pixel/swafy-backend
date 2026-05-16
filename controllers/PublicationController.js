@@ -37,21 +37,24 @@ const notifMessage = "📢 Nouvelle publication ajoutée";
 // ✅ admin id (ديناميك)
 const adminId = req.user.id_user;
 
-// ✅ insert notif للadmin فقط
-// ✅ 1. نجيب كل les jeunes
+console.log("🔥 CREATE PUBLICATION HIT ✅");
+
 const [jeunes] = await db.query(
   "SELECT id_user FROM utilisateurs WHERE role = 'jeune'"
 );
 
-// ✅ 2. نعمل notification لكل jeune
+console.log("👥 JEUNES FOUND:", jeunes);
+
 for (const jeune of jeunes) {
+  console.log("📤 SEND NOTIF TO:", jeune.id_user);
+
   await db.query(
     `INSERT INTO notifications
     (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
     [
-      jeune.id_user,       // ✅ كل jeune
-      userId,              // ✅ admin
+      jeune.id_user,
+      userId,
       "new_post",
       "publication",
       publicationId,
