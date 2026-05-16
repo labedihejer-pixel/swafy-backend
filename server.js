@@ -71,7 +71,25 @@ app.get("/", (req, res) => {
   res.json({ message: "🚀 Serveur lancé avec succès" });
 });
 
+const { sendEmail } = require("./utils/mailer");
 
+app.get("/test-email", async (req, res) => {
+  try {
+    await sendEmail(
+      "email_k@gmail.com", // 🔁 بدّلها بالإيميل متاعك
+      "Test Swafy ✅",
+      `
+      <p>Bonjour 👋</p>
+      <p>Email test fonctionne correctement ✅</p>
+      `
+    );
+
+    res.send("✅ Email envoyé !");
+  } catch (err) {
+    console.error(err);
+    res.send("❌ Erreur email");
+  }
+});
 // ===============================
 // ✅ SOCKET.IO
 // ===============================
@@ -206,7 +224,27 @@ db.query(`
 `)
   .then(() => console.log("✅ notifications table ready"))
   .catch((err) => console.error("❌ notifications table error", err));
+app.post("/api/meet/invite", async (req, res) => {
 
+  try {
+
+    const { email } = req.body;
+
+    console.log("📨 Invitation envoyée à:", email);
+
+    return res.json({
+      success: true
+    });
+
+  } catch (err) {
+
+    return res.status(500).json({
+      success: false
+    });
+
+  }
+
+});
 // ===============================
 // ✅ START SERVER
 // ===============================

@@ -1,3 +1,4 @@
+const { sendEmail } = require("../utils/mailer");
 const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -5,6 +6,7 @@ const https = require("https");
 const seedAdmin = async () => {
 const email = "admin@gmail.com";
 const plainPassword = "adminadmin";
+const { sendEmail } = require("../utils/mailer");
 
   // ✅ شيك هل موجود
   const [rows] = await db.execute(
@@ -104,8 +106,6 @@ const register = async (req, res) => {
 };
 
 const sendPassword = async (req, res) => {
-  console.log("✅ EMAIL SYSTEM (TEST MODE)");
-
   try {
     const { email_user } = req.body;
 
@@ -124,7 +124,7 @@ const sendPassword = async (req, res) => {
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    console.log("📩 CODE:", code); 
+    console.log("📤 Sending email to:", email_user);
 
     await db.query(
       `UPDATE utilisateurs 
@@ -133,28 +133,45 @@ const sendPassword = async (req, res) => {
       [code, email_user]
     );
 
-    // ✅ IMPORTANT: ما نبعتش email توّا
+    // ✅ إرسال email الحقيقي
+    await sendEmail(
+  email_user,
+  "Code de vérification Swafy",
+  `
+  <p>Bonjour ${existing.length ? existing[0].nom_user : ""},</p>
+
+  <p>Vous avez demandé un code de vérification.</p>
+
+  <p>Votre code est :</p>
+
+  <h2>${code}</h2>
+
+  <p>Ce code est valable 10 minutes.</p>
+
+  <p>Si vous n’êtes pas à l’origine de cette demande, ignorez cet email.</p>
+
+  <p>Cordialement,<br/>L’équipe Swafy</p>
+  `
+);
+
     return res.json({
       success: true,
-      message: "Code généré ✅",
-      code  // 👈 باش تشوفه في Network
+      message: " Code envoyé par email"
     });
 
   } catch (err) {
-    console.error(err);
+    console.error(" sendPassword:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-
 // ===============================
-// ✅ VERIFY CODE (TEST MODE)
+//  VERIFY CODE (TEST MODE)
 // ===============================
 const verifyCode = async (req, res) => {
   try {
     const { email_user, code } = req.body;
 
-    // ✅ نثبت الكود + الوقت
     const [rows] = await db.query(
       `SELECT * FROM utilisateurs 
        WHERE email_user = ? 
@@ -166,17 +183,16 @@ const verifyCode = async (req, res) => {
     if (!rows.length) {
       return res.status(401).json({ message: "Code incorrect ou expiré" });
     }
-  
 
     const user = rows[0];
-      
-    // ✅ نمسحو الكود بعد التحقّق
+
+    // ✅ نحذف الكود
     await db.query(
       "UPDATE utilisateurs SET verification_code = NULL, verification_expires = NULL WHERE email_user = ?",
       [email_user]
     );
 
-    // ✅ token
+    // ✅ نعطي token مباشرة
     const token = jwt.sign(
       {
         id_user: user.id_user,
@@ -187,13 +203,11 @@ const verifyCode = async (req, res) => {
       { expiresIn: "24h" }
     );
 
-    res.json({
+    return res.json({
+      success: true,
       token,
-      user: {
-        id_user: user.id_user,
-        email_user: user.email_user,
-        role: user.role,
-      },
+      user,
+      redirect: "/jeuneLayout"
     });
 
   } catch (err) {

@@ -11,7 +11,7 @@ module.exports = (server) => {
     }
   });
 
-  // ✅ Middleware: تحقق من token
+  
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
