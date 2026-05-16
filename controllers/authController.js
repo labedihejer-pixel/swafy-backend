@@ -109,58 +109,52 @@ const sendPassword = async (req, res) => {
   try {
     const { email_user } = req.body;
 
+    // ✅ نثبت إذا اليوزر موجود
     const [existing] = await db.query(
       "SELECT * FROM utilisateurs WHERE email_user = ?",
       [email_user]
     );
 
+    let user;
+
+    // ✅ إذا موش موجود → نعمل compte jeune
     if (!existing.length) {
       await db.query(
-        `INSERT INTO utilisateurs (nom_user, email_user, role, status_user)
-         VALUES ('temp', ?, 'jeune', 'inactif')`,
+        `INSERT INTO utilisateurs 
+        (nom_user, email_user, role, status_user)
+        VALUES (?, ?, 'jeune', 'actif')`,
+        ["JeuneTest", email_user]
+      );
+
+      const [newUser] = await db.query(
+        "SELECT * FROM utilisateurs WHERE email_user = ?",
         [email_user]
       );
+
+      user = newUser[0];
+    } else {
+      user = existing[0];
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-    console.log("📤 Sending email to:", email_user);
-
-    await db.query(
-      `UPDATE utilisateurs 
-       SET verification_code = ?, verification_expires = DATE_ADD(NOW(), INTERVAL 10 MINUTE) 
-       WHERE email_user = ?`,
-      [code, email_user]
+    // ✅ login مباشر (بدون email)
+    const token = jwt.sign(
+      {
+        id_user: user.id_user,
+        email_user: user.email_user,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
     );
-
-    // ✅ إرسال email الحقيقي
-    await sendEmail(
-  email_user,
-  "Code de vérification Swafy",
-  `
-  <p>Bonjour ${existing.length ? existing[0].nom_user : ""},</p>
-
-  <p>Vous avez demandé un code de vérification.</p>
-
-  <p>Votre code est :</p>
-
-  <h2>${code}</h2>
-
-  <p>Ce code est valable 10 minutes.</p>
-
-  <p>Si vous n’êtes pas à l’origine de cette demande, ignorez cet email.</p>
-
-  <p>Cordialement,<br/>L’équipe Swafy</p>
-  `
-);
 
     return res.json({
       success: true,
-      message: " Code envoyé par email"
+      token,
+      user,
     });
 
   } catch (err) {
-    console.error(" sendPassword:", err);
+    console.error("❌ sendPassword error:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
