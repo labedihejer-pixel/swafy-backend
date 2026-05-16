@@ -34,7 +34,7 @@ const sendEmail = async (toEmail, subject, htmlContent) => {
           resolve(body);
         } else {
           console.error('❌ Erreur Brevo:', body);
-          reject(new Error(body));
+          reject(new Error(`Status: ${res.statusCode} - Body: ${body}`));
         }
       });
     });

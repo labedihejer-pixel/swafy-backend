@@ -81,7 +81,7 @@ app.get("/api/test-email", async (req, res) => {
       "<p>Email OK ✅</p>"
     );
 
-    res.json({ success: true });
+    res.json({ success: false, error: err.message });
 
   } catch (err) {
     console.error("❌ ERROR FULL:", err); // ✅ مهم
