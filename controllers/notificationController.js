@@ -42,7 +42,7 @@ exports.markAsRead = async (req, res) => {
       return res.status(200).json({ message: "OK" });
     }
 
-    const userId = req.user.id_user;
+   const userId = 1;
     const { id } = req.params;
 
     await db.query(
