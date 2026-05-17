@@ -128,12 +128,22 @@ router.get("/", verifyToken, async (req, res) => {
 
 // ✅ Block user
 router.put("/block/:id", verifyToken, async (req, res) => {
-  const { id } = req.params;
-  await db.execute(
-    "UPDATE utilisateurs SET status_user='blocked' WHERE id_user=?",
-    [id]
-  );
-  res.json({ message: "Blocked ✅" });
+  try {
+    const { id } = req.params;
+
+    const [result] = await db.execute(
+      "UPDATE utilisateurs SET status_user='blocked' WHERE id_user=?",
+      [id]
+    );
+
+    console.log("BLOCK RESULT:", result);
+
+    res.json({ message: "Blocked ✅" });
+
+  } catch (err) {
+    console.error("BLOCK ERROR:", err);
+    res.status(500).json({ message: "Erreur blocage" });
+  }
 });
 // ✅ Delete user
 router.delete("/:id", verifyToken, async (req, res) => {
