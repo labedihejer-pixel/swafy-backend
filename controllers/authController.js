@@ -89,43 +89,51 @@ const login = async (req, res) => {
 // ===============================
 const register = async (req, res) => {
   try {
-    const { nom_user, email_user, mot_de_passe_user } = req.body;
+    const { nom_user, email_user } = req.body;
 
+    // ✅ check user
     const [existing] = await db.query(
       "SELECT * FROM utilisateurs WHERE email_user = ?",
       [email_user]
     );
 
-    if (existing.length) {
-      return res.status(409).json({ message: "Cet email est déjà utilisé" });
+    if (!existing.length) {
+      await db.query(
+        `INSERT INTO utilisateurs (nom_user, email_user, role, status_user)
+         VALUES (?, ?, 'jeune', 'actif')`,
+        [nom_user, email_user]
+      );
     }
 
-    const hash = await bcrypt.hash(mot_de_passe_user, 10);
+    // ✅ generate code
+    const code = Math.floor(100000 + Math.random() * 900000);
+    console.log("🔥 CODE:", code);
 
+    // ✅ save code
     await db.query(
-      `INSERT INTO utilisateurs (nom_user, email_user, mot_de_passe_user, role, status_user)
-       VALUES (?, ?, ?, 'jeune', 'actif')`,
-      [nom_user, email_user, hash]
+      `UPDATE utilisateurs
+       SET verification_code = ?, verification_expires = DATE_ADD(NOW(), INTERVAL 10 MINUTE)
+       WHERE email_user = ?`,
+      [code, email_user]
     );
 
-    res.status(201).json({ message: "Inscription réussie" });
+    // ✅ SEND EMAIL ✅✅ (أهم سطر)
+    await sendEmail(
+      email_user,
+      "Code de vérification",
+      `<h2>Code: ${code}</h2>`
+    );
+
+    console.log("✅ EMAIL SENT ✅");
+
+    res.json({ success: true });
+
   } catch (err) {
+    console.error("REGISTER ERROR:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-const sendPassword = async (req, res) => {
-  try {
-    const { email_user } = req.body;
-
-    // ✅ generate code
-    const code = Math.floor(100000 + Math.random() * 900000);
-
-    // ✅ check if user exists
-    const [existing] = await db.query(
-      "SELECT * FROM utilisateurs WHERE email_user = ?",
-      [email_user]
-    );
 
     // ✅ create user if not exists
     if (!existing.length) {
