@@ -32,30 +32,28 @@ const { sendEmail } = require("../utils/mailer");
 
 const login = async (req, res) => {
   try {
-    const { email_user, mot_de_passe_user } = req.body;
+    console.log("BODY:", req.body);
 
-    if (!email_user || !mot_de_passe_user) {
-      return res.status(401).json({ message: "Email ou mot de passe incorrect" });
-    }
+    const { email, password } = req.body; ✅✅
 
     const [rows] = await db.query(
       "SELECT * FROM utilisateurs WHERE email_user = ?",
-      [email_user]
+      [email]
     );
 
     if (!rows.length) {
-      return res.status(401).json({ message: "Email ou mot de passe incorrect" });
+      return res.status(401).json({ message: "User not found" });
     }
 
     const user = rows[0];
 
     const validPassword = await bcrypt.compare(
-      mot_de_passe_user,
+      password,
       user.mot_de_passe_user
     );
 
     if (!validPassword) {
-      return res.status(401).json({ message: "Email ou mot de passe incorrect" });
+      return res.status(401).json({ message: "Password incorrect" });
     }
 
     const token = jwt.sign(
@@ -69,11 +67,13 @@ const login = async (req, res) => {
     );
 
     res.json({ token, user });
+
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
+
 
 // ===============================
 // ✅ REGISTER

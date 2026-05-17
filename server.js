@@ -42,15 +42,13 @@ const server = http.createServer(app);
 // ===============================
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
   })
 );
+app.use(express.json());
 
-
-app.options("*", cors());
 // ===============================
 // ✅ API ROUTES
 // ===============================
@@ -97,6 +95,7 @@ app.get("/api/test-email", async (req, res) => {
     });
   }
 });
+
 
 // ===============================
 // ✅ SOCKET.IO
