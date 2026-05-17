@@ -173,6 +173,7 @@ router.get("/", verifyToken, async (req, res) => {
 router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
   console.log("🔥🔥🔥 POST /publications HIT 🔥🔥🔥");
   console.log("🔥 POST /publications — NEW CODE RUNNING"); 
+  
   console.log("🚀 BEFORE INSERT NOTIF");
   try {
     const userId = req.user.id_user;
@@ -200,7 +201,7 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
       return res.status(400).json({ error: "Write something or upload a file" });
     }
 
-    const userId = req.user.id_user;
+    
     console.log("✅ USER FROM TOKEN:", userId);
 
     const [result] = await db.query(
@@ -225,7 +226,7 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
     
     console.log("RESULT INSERT:", result);
     const publicationId = result?.insertId || result?.[0]?.insertId;
-
+    const notifMessage = "📢 Nouvelle publication ajoutée";
     console.log("publicationId FIXED:", publicationId);
     console.log("VALUES TEST:", userId, publicationId);
     
@@ -308,7 +309,7 @@ console.log(" notification admin créée ");
 // ===============================
 router.post("/:id/comments", verifyToken, async (req, res) => {
   try {
-    
+    const userId = req.user.id_user;
     const { id } = req.params;
     const { contenu_commentaire, type_commentaire = "texte" } = req.body;
 
@@ -393,6 +394,7 @@ router.get("/:id/comments", async (req, res) => {
 router.post("/:id/reactions", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id_user;
+    
     const pubId = req.params.id;
     const { type_reaction } = req.body;
 
