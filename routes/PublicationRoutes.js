@@ -200,13 +200,8 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
       return res.status(400).json({ error: "Write something or upload a file" });
     }
 
-    const [userExists] = await db.query(
-      "SELECT id_user FROM utilisateurs WHERE id_user = ?",
-      [userId]
-    );
-    if (!userExists || userExists.length === 0) {
-      return res.status(401).json({ error: "User not found" });
-    }
+    const userId = req.user.id_user;
+    console.log("✅ USER FROM TOKEN:", userId);
 
     const [result] = await db.query(
   `INSERT INTO publications
@@ -236,21 +231,28 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
     
 
 
-let notifMessage = " Nouvelle publication ajoutée";
-console.log(" BEFORE INSERT NOTIF");
-await db.query(
-  `INSERT INTO notifications
-  (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
-  [
-    userId,          // admin connecté
-    userId,
-    "new_post",
-    "publication",
-    publicationId,
-    notifMessage,
-  ]
+const [jeunes] = await db.query(
+  "SELECT id_user FROM utilisateurs WHERE role = 'jeune'"
 );
+
+for (const jeune of jeunes) {
+  console.log("📤 SEND NOTIF TO:", jeune.id_user);
+
+  await db.query(
+    `INSERT INTO notifications
+    (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
+    [
+      jeune.id_user, 
+      userId,         
+      "new_post",
+      "publication",
+      publicationId,
+      notifMessage,
+    ]
+  );
+}
+
 
 console.log(" notification admin créée ");
     //  INSERT medias
@@ -306,7 +308,7 @@ console.log(" notification admin créée ");
 // ===============================
 router.post("/:id/comments", verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id_user;
+    
     const { id } = req.params;
     const { contenu_commentaire, type_commentaire = "texte" } = req.body;
 
