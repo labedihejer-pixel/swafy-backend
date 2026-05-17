@@ -4,7 +4,7 @@ const db = require("../config/db");
 const { verifyToken } = require("../middleware/authMiddleware");
 
 // ════════════════════════════════════════
-// ✅ Compter le nombre de jeunes (utilisateurs)
+//  Compter le nombre de jeunes (utilisateurs)
 // ════════════════════════════════════════
 router.get("/count/jeune", async (req, res) => {
   try {
@@ -17,9 +17,8 @@ router.get("/count/jeune", async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 });
-
 // ════════════════════════════════════════
-// ✅ Compter tous les utilisateurs
+//  Compter tous les utilisateurs
 // ════════════════════════════════════════
 router.get("/count/all", async (req, res) => {
   try {
@@ -33,7 +32,7 @@ router.get("/count/all", async (req, res) => {
 });
 
 // ════════════════════════════════════════
-// ✅ Compter les jeunes ayant un profil complet
+//  Compter les jeunes ayant un profil complet
 // ════════════════════════════════════════
 router.get("/count/jeune-profiles", async (req, res) => {
   try {
@@ -51,7 +50,7 @@ router.get("/count/jeune-profiles", async (req, res) => {
 });
 
 // ════════════════════════════════════════
-// ✅ Liste des utilisateurs (admin only)
+//  Liste des utilisateurs (admin only)
 // ════════════════════════════════════════
 router.get("/list", verifyToken, async (req, res) => {
   try {
@@ -67,7 +66,7 @@ router.get("/list", verifyToken, async (req, res) => {
 });
 
 // ════════════════════════════════════════
-// ✅ Liste des jeunes avec leur profil (pour Live)
+//  Liste des jeunes avec leur profil (pour Live)
 // ════════════════════════════════════════
 router.get("/jeunes-profiles", verifyToken, async (req, res) => {
   try {
@@ -98,24 +97,7 @@ router.get("/jeunes-profiles", verifyToken, async (req, res) => {
 // ════════════════════════════════════════
 // ✅ Récupérer un utilisateur par ID
 // ════════════════════════════════════════
-router.get("/:id", verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const [rows] = await db.execute(
-      `SELECT id_user, nom_user, email_user, role, gouvernorat 
-       FROM utilisateurs 
-       WHERE id_user = ?`,
-      [id]
-    );
 
-    if (!rows.length)
-      return res.status(404).json({ message: "Utilisateur introuvable" });
-
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-});
 // ✅ GET admins only
 router.get("/admins", verifyToken, async (req, res) => {
   try {
@@ -143,5 +125,42 @@ router.get("/", verifyToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ✅ Block user
+router.put("/block/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  await db.execute(
+    "UPDATE utilisateurs SET status_user='blocked' WHERE id_user=?",
+    [id]
+  );
+  res.json({ message: "Blocked ✅" });
+});
+// ✅ Delete user
+router.delete("/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  await db.execute("DELETE FROM utilisateurs WHERE id_user = ?", [id]);
+  res.json({ message: "Deleted ✅" });
+});
+
+// ✅ GET user by ID (خليها آخر حاجة)
+router.get("/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await db.execute(
+      `SELECT id_user, nom_user, email_user, role, gouvernorat 
+       FROM utilisateurs 
+       WHERE id_user = ?`,
+      [id]
+    );
+
+    if (!rows.length)
+      return res.status(404).json({ message: "Utilisateur introuvable" });
+
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
 
 module.exports = router;
