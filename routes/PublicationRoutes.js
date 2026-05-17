@@ -8,7 +8,7 @@ const path = require("path");
 const fs = require("fs");
 const adminId = 286;
 // ===============================
-// ✅ Setup multer
+//  Setup multer
 // ===============================
 const uploadsDir = path.join(__dirname, "../uploads/publications");
 if (!fs.existsSync(uploadsDir)) {
@@ -77,7 +77,7 @@ const safeDiskPathFromUrlMedia = (url_media) => {
 };
 
 // ===============================
-// 📋 GET /publications/public
+//  GET /publications/public
 // ===============================
 router.get("/public", async (req, res) => {
   try {
@@ -110,7 +110,7 @@ router.get("/public", async (req, res) => {
 });
 
 // ===============================
-// 📋 GET /publications (auth)
+//  GET /publications (auth)
 // ===============================
 router.get("/", verifyToken, async (req, res) => {
   try {
@@ -167,7 +167,7 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 // ===============================
-// 📝 POST /publications (create)
+//  POST /publications (create)
 // supports multipart (files[]) + also supports body "contenu" coming from frontend
 // ===============================
 router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
@@ -203,17 +203,11 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
 
     
     console.log("✅ USER FROM TOKEN:", userId);
-
-    const [result] = await db.query(
+   console.log("✅ POST /publications CALLED");
+  // ✅ INSERT publication
+const [result] = await db.query(
   `INSERT INTO publications
-   (
-     user_id,
-     titre_publication,
-     contenu,
-     type_publication,
-     created_at,
-     status_publication
-   )
+   (user_id, titre_publication, contenu, type_publication, created_at, status_publication)
    VALUES (?, ?, ?, ?, NOW(), ?)`,
   [
     userId,
@@ -223,39 +217,54 @@ router.post("/", verifyToken, upload.array("files", 10), async (req, res) => {
     "publie"
   ]
 );
-    
-    console.log("RESULT INSERT:", result);
-    const publicationId = result?.insertId || result?.[0]?.insertId;
-    const notifMessage = "📢 Nouvelle publication ajoutée";
-    console.log("publicationId FIXED:", publicationId);
-    console.log("VALUES TEST:", userId, publicationId);
-    
 
+// ✅ نضمنو id صحيح
+const publicationId = result.insertId;
 
+if (!publicationId) {
+  console.log("❌ publicationId undefined STOP");
+  return res.status(500).json({ error: "Publication failed" });
+}
+
+console.log("✅ publicationId:", publicationId);
+
+// ✅ FETCH JEUNES
 const [jeunes] = await db.query(
   "SELECT id_user FROM utilisateurs WHERE role = 'jeune'"
 );
 
-for (const jeune of jeunes) {
-  console.log("📤 SEND NOTIF TO:", jeune.id_user);
+console.log("✅ JEUNES:", jeunes);
 
-  await db.query(
-    `INSERT INTO notifications
-    (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
-    [
-      jeune.id_user, 
-      userId,         
-      "new_post",
-      "publication",
-      publicationId,
-      notifMessage,
-    ]
-  );
+// ❌ إذا فارغ
+if (!jeunes || jeunes.length === 0) {
+  console.log("❌ NO JEUNES FOUND");
 }
 
 
-console.log(" notification admin créée ");
+
+for (const jeune of jeunes) {
+  console.log("📤 SEND NOTIF TO:", jeune.id_user);
+
+  const userTo = jeune.id_user;
+  const userFrom = userId;
+
+  console.log("✅ VALUES:", userTo, userFrom);
+
+  const [resNotif] = await db.query(
+    "INSERT INTO notifications (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, NOW())",
+    [
+      userTo,      // ✅ لازم تكون FIRST
+      userFrom,    // ✅ SECOND
+      "new_post",
+      "publication",
+      publicationId,
+      "📢 Nouvelle publication ajoutée"
+    ]
+  );
+
+  console.log("✅ INSERT RESULT:", resNotif);
+}
+
     //  INSERT medias
     if (hasFiles) {
       for (const file of req.files) {
@@ -305,7 +314,7 @@ console.log(" notification admin créée ");
 
 });
 // ===============================
-// 💬 POST /publications/:id/comments
+//  POST /publications/:id/comments
 // ===============================
 router.post("/:id/comments", verifyToken, async (req, res) => {
   try {
@@ -360,7 +369,7 @@ router.post("/:id/comments", verifyToken, async (req, res) => {
 });
 
 // ===============================
-// 📝 GET /publications/:id/comments
+// GET /publications/:id/comments
 // ===============================
 router.get("/:id/comments", async (req, res) => {
   try {

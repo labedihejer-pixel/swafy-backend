@@ -42,17 +42,17 @@ console.log("🔥 CREATE PUBLICATION HIT ✅");
 const [jeunes] = await db.query(
   "SELECT id_user FROM utilisateurs WHERE role = 'jeune'"
 );
-
+console.log("JEUNES:", jeunes);
 for (const jeune of jeunes) {
   console.log("📤 SEND NOTIF TO:", jeune.id_user);
-
+  console.log("📤 SEND NOTIF TO:", jeune.id_user);
   await db.query(
     `INSERT INTO notifications
     (id_user_to, id_user_from, type_notification, entity_type, entity_id, message, is_read, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, NOW())`,
     [
-      jeune.id_user,      // ✅ TO (jeune)
-      userId,             // ✅ FROM (admin)
+      jeune.id_user,      
+      userId,             
       "new_post",
       "publication",
       publicationId,
@@ -60,9 +60,9 @@ for (const jeune of jeunes) {
     ]
   );
 }
-// ✅ بعد كل شي نرجع response
+
 res.json({
-  message: "✅ Publication créée + notifications envoyées",
+  message: " Publication créée + notifications envoyées",
   publicationId
 });
 

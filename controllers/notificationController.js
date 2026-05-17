@@ -2,22 +2,36 @@ const db = require("../config/db");
 
 exports.getMyNotifications = async (req, res) => {
   try {
-    
-    const userId = 1;
+    const userId = Number(req.user.id_user);
 
-   const [rows] = await db.query(`
-  SELECT
-    n.*,
-    u.nom_user,
-    u.prenom_user,
-    u.photo_user
-  FROM notifications n
-  LEFT JOIN utilisateurs u
-    ON u.id_user = n.id_user_from
-  WHERE n.id_user_to = ?
-  ORDER BY n.created_at DESC
-`, [userId]);
-console.log("NOTIFICATIONS:", rows);
+    console.log("🔥 USER ID:", userId);
+    console.log("🔥 TYPE:", typeof userId);
+    const [directTest] = await db.query(
+      "SELECT * FROM notifications WHERE id_user_to = ?",
+      [userId]
+    );
+
+console.log("🔥 DIRECT TEST RESULT:", directTest);
+
+     const [tables] = await db.query("SHOW TABLES");
+    console.log("🔥 TABLES:", tables);
+    // ✅ fetch notifications
+    const [rows] = await db.query(`
+      SELECT
+        n.*,
+        u.nom_user,
+        u.prenom_user,
+        u.photo_user
+      FROM notifications n
+      LEFT JOIN utilisateurs u
+        ON u.id_user = n.id_user_from
+      WHERE n.id_user_to = ?
+      ORDER BY n.created_at DESC
+    `, [userId]);
+
+    console.log("✅ NOTIFICATIONS:", rows);
+  
+    // ✅ unread count
     const [[unread]] = await db.query(`
       SELECT COUNT(*) AS unread_count
       FROM notifications
@@ -34,15 +48,14 @@ console.log("NOTIFICATIONS:", rows);
     res.status(500).json({ message: "Erreur serveur notifications" });
   }
 };
-
 exports.markAsRead = async (req, res) => {
   try {
 
     if (!req.user || !req.user.id_user) {
       return res.status(200).json({ message: "OK" });
     }
+const userId = parseInt(req.user.id_user);
 
-   const userId = 1;
     const { id } = req.params;
 
     await db.query(
@@ -65,7 +78,7 @@ exports.markAllRead = async (req, res) => {
       return res.status(200).json({ message: "OK" });
     }
 
-    const userId = 1;
+  const userId = req.user.id_user;
 
     await db.query(
       "UPDATE notifications SET is_read = 1 WHERE id_user_to = ?",
