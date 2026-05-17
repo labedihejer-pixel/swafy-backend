@@ -109,48 +109,44 @@ const sendPassword = async (req, res) => {
   try {
     const { email_user } = req.body;
 
-    // ✅ نثبت إذا اليوزر موجود
+    // ✅ generate code
+    const code = Math.floor(100000 + Math.random() * 900000);
+
+    // ✅ check if user exists
     const [existing] = await db.query(
       "SELECT * FROM utilisateurs WHERE email_user = ?",
       [email_user]
     );
 
-    let user;
-
-    // ✅ إذا موش موجود → نعمل compte jeune
+    // ✅ create user if not exists
     if (!existing.length) {
       await db.query(
-        `INSERT INTO utilisateurs 
-        (nom_user, email_user, role, status_user)
-        VALUES (?, ?, 'jeune', 'actif')`,
+        `INSERT INTO utilisateurs (nom_user, email_user, role, status_user)
+         VALUES (?, ?, 'jeune', 'actif')`,
         ["JeuneTest", email_user]
       );
-
-      const [newUser] = await db.query(
-        "SELECT * FROM utilisateurs WHERE email_user = ?",
-        [email_user]
-      );
-
-      user = newUser[0];
-    } else {
-      user = existing[0];
     }
 
-    // ✅ login مباشر (بدون email)
-    const token = jwt.sign(
-      {
-        id_user: user.id_user,
-        email_user: user.email_user,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "24h" }
+    // ✅ save code in DB
+    await db.query(
+      `UPDATE utilisateurs
+       SET verification_code = ?, verification_expires = DATE_ADD(NOW(), INTERVAL 10 MINUTE)
+       WHERE email_user = ?`,
+      [code, email_user]
     );
+
+    // ✅ SEND EMAIL 🔥🔥🔥
+    await sendEmail(
+      email_user,
+      "Code de vérification - Swafy",
+      `<h2>Votre code est: ${code}</h2>`
+    );
+
+    console.log("✅ CODE SENT:", code);
 
     return res.json({
       success: true,
-      token,
-      user,
+      message: "Code envoyé ✅",
     });
 
   } catch (err) {
@@ -158,6 +154,7 @@ const sendPassword = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
+
 
 // ===============================
 //  VERIFY CODE (TEST MODE)
