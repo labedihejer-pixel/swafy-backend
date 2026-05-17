@@ -117,7 +117,7 @@ const register = async (req, res) => {
       [code, email_user]
     );
 
-    // ✅ SEND EMAIL ✅✅ (أهم سطر)
+    // ✅ SEND EMAIL
     await sendEmail(
       email_user,
       "Code de vérification",
@@ -134,6 +134,19 @@ const register = async (req, res) => {
   }
 };
 
+
+const sendPassword = async (req, res) => {
+  try {
+    const { email_user } = req.body;
+
+    // ✅ generate code
+    const code = Math.floor(100000 + Math.random() * 900000);
+
+    // ✅ check if user exists
+    const [existing] = await db.query(
+      "SELECT * FROM utilisateurs WHERE email_user = ?",
+      [email_user]
+    );
 
     // ✅ create user if not exists
     if (!existing.length) {
