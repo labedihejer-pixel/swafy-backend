@@ -40,15 +40,16 @@ const server = http.createServer(app);
 // ===============================
 // ✅ MIDDLEWARE
 // ===============================
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-app.use(express.json());
+app.use(cors({
+  origin: true, 
+  credentials: true,
+  methods: ["GET","POST","PUT","DELETE"],
+  allowedHeaders: ["Content-Type","Authorization"]
+}));
 
+app.options("*", cors());
+
+app.use(express.json());
 // ===============================
 // ✅ API ROUTES
 // ===============================
