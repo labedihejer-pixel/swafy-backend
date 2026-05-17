@@ -37,6 +37,11 @@ const login = async (req, res) => {
     const email = req.body.email || req.body.email_user;
     const password = req.body.password || req.body.mot_de_passe_user;
 
+    // ✅ ✅ أهم check
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email ou mot de passe manquant" });
+    }
+
     const [rows] = await db.query(
       "SELECT * FROM utilisateurs WHERE email_user = ?",
       [email]
@@ -47,6 +52,11 @@ const login = async (req, res) => {
     }
 
     const user = rows[0];
+
+    // ✅ ✅ حماية من crash
+    if (!user.mot_de_passe_user) {
+      return res.status(500).json({ message: "Password not set in DB" });
+    }
 
     const validPassword = await bcrypt.compare(
       password,
@@ -70,12 +80,10 @@ const login = async (req, res) => {
     res.json({ token, user });
 
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    console.error("LOGIN ERROR:", err);  مهم
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
-
-
 // ===============================
 // ✅ REGISTER
 // ===============================
