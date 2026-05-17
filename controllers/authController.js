@@ -34,7 +34,8 @@ const login = async (req, res) => {
   try {
     console.log("BODY:", req.body);
 
-    const { email, password } = req.body; ✅✅
+    const email = req.body.email || req.body.email_user;
+    const password = req.body.password || req.body.mot_de_passe_user;
 
     const [rows] = await db.query(
       "SELECT * FROM utilisateurs WHERE email_user = ?",
